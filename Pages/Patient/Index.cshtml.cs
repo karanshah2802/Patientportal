@@ -36,6 +36,7 @@ namespace Patientportal.Pages.Patient
         public List<string> ChangeRequests { get; set; } = new List<string>();
         public List<AppointmentListItem> Doctorblocktime { get; set; } = new List<AppointmentListItem>();
         public List<Holidays> Holidays { get; set; } = new List<Holidays>();
+        public List<Leave> Leaves { get; set; } = new List<Leave>();
         public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration)
         {
             _logger = logger;
@@ -293,6 +294,7 @@ namespace Patientportal.Pages.Patient
             string apiUrl3 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsPortalByDoctor?id={Id}";
             string apiUrl4 = $"{baseUrl}/api/v1/Appointment/GetInvoiceAmount?id={Id}";
             string apiUrl5 = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
+            string apileavlist = $"{baseUrl}/api/v1/Holiday/getLeaveList";
             string apiUrl6 = $"{baseUrl}/api/v1/CountryStateCity/GetCountry";
             string token1 = "yJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJuYW1laWQiOiIyIiwic3ViIjoiMiIsInVuaXF1ZV9uYW1lIjoiSmFscGEiLCJlbWFpbCI6ImphbHBhQGludXJza24uaW4iLCJyb2xlIjoiRnJvbnREZXNrUHJlU2FsZXMiLCJuYmYiOjE3NTA0MDE5ODUsImV4cCI6MTc1MTAwNjc4NSwiaWF0IjoxNzUwNDAxOTg1LCJpc3MiOiJDb25uZXR3ZWxsQ0lTIiwiYXVkIjoiQ29ubmV0d2VsbENJUyJ9.xS0iiGb41T-V0kx0OXK2oOMAO5B_a-thQFx-bfHruOMp8QQUuEGqHPY04ZzjVBSJceZQq5qmokgFNbkotSSrOw";
             string apiUrl7 = $"{baseUrl}/api/v1/Pincode/getallpincode";
@@ -302,6 +304,7 @@ namespace Patientportal.Pages.Patient
             var invoiceResponse = await _apiService.GetAsync<InvoiceResponse>(apiUrl4, token);
             Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>();
             Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl5, token) ?? new List<Holidays>();
+            Leaves = await _apiService.GetAsync<List<Leave>>(apileavlist, token) ?? new List<Leave>();
             CountryLists = await _apiService.GetAsync<List<Country>>(apiUrl6, token) ?? new List<Country>();
             Pincodes = await _apiService.GetAsync<List<Pincode>>(apiUrl7, token1) ?? new List<Pincode>();
             //if (Doctorblocktime != null && Doctorblocktime.Count > 0 )
@@ -429,15 +432,28 @@ namespace Patientportal.Pages.Patient
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/UpsertAppointmentRequest";
             string apiUrl5 = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
-
+            string apileavlist = $"{baseUrl}/api/v1/Holiday/getLeaveList";
             Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl5, token) ?? new List<Holidays>();
+
+            Leaves = await _apiService.GetAsync<List<Leave>>(apileavlist, token) ?? new List<Leave>();
             var appointmentDate = viewModel.AppointmentStartTime.Value.ToString("dd/MM/yyyy");
             var isHoliday = Holidays.Any(h => h.StartDate.HasValue &&
                                               h.StartDate.Value.ToString("dd/MM/yyyy") == appointmentDate);
+            int doctorId = 1; // <-- Default doctor
+
+            var isleave = Leaves.Any(h =>
+                h.StartDateTime.HasValue &&
+                h.DoctorId == doctorId &&     // 🔥 Only check for doctor ID = 1
+                h.StartDateTime.Value.ToString("dd/MM/yyyy") == appointmentDate
+            );
 
             if (isHoliday)
             {
                 return new JsonResult(new { isSuccess = false, errorMessage = "Appointments cannot be scheduled on holidays." });
+            }
+            if (isleave)
+            {
+                return new JsonResult(new { isSuccess = false, errorMessage = "Appointments cannot be scheduled on leave." });
             }
             var apiHelper = new ApiService(_httpClient);
             var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
@@ -458,6 +474,7 @@ namespace Patientportal.Pages.Patient
 public class Pincode
 {
     public int Id { get; set; }
+    public string LocalityName { get; set; }
     public string Pincodes { get; set; }  // match this with what API returns
 }
 

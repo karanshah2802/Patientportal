@@ -12,7 +12,12 @@
 
     List<string> MaritalStatusList = new List<string> { "Single", "Married", "Divorced" };
 
-    var pendingBalance = ViewData["Invoice"] as decimal? ?? 0;
+    var pendingBalance = 0m;
+
+    if (ViewData["Invoice"] != null && decimal.TryParse(ViewData["Invoice"].ToString(), out var value))
+    {
+        pendingBalance = value;
+    }
 }
 @Html.AntiForgeryToken()
 <!DOCTYPE html>
@@ -41,8 +46,8 @@
 
                     <div class="ius-grid-filters">
                         <div class="dropdown">
-                            <a class="bttn-add" href="#" data-bs-toggle="dropdown" title="Add Appointment">
-                                <img loading="lazy" src="~/assets/plus.svg" width="19" height="19" alt="Add">
+                            <a class="" href="#" data-bs-toggle="dropdown" title="Book Appointment">
+                                Book Appointment
                             </a>
                             <ul class="dropdown-menu">
                                 <li>
@@ -107,7 +112,7 @@
                         </e-grid-columns>
                     </ejs-grid>
                     <script id="actionTemplate" type="text/x-template">
-                        ${if(statusName !== "Cancelled" && statusName !== "Checked-In" && statusName !== "Completed" && appoinmentType !== "Appointment Request for Online Consultation" && appoinmentType !== "Appointment Request for Procedures")}
+                        ${if(statusName !== "Cancelled"  && statusName !== "Walked-Out" && statusName !== "Checked-In" && statusName !== "Completed" && appoinmentType !== "Appointment Request for Online Consultation" && appoinmentType !== "Dr. Sejal Online Consultation" && appoinmentType !== "Appointment Request for Procedures")}
                                                 <a href="#schedulerModal"
                            class="app-resched"
                            title="Reschedule"
@@ -245,11 +250,9 @@
 
                         <div class="col-md-6 col-xl-4" id="referencePincodeDiv">
                             <label class="form-label">Pincode*</label>
-                            <ejs-dropdownlist id="pincodedropdown"
+                            <ejs-multiselect id="pincodedropdown"
                                              cssClass="e-multi-column"
-                                            showClearButton="true"
-                                              style="height: 45px;"
-                                              allowSelection="true"
+                                             mode="Box"
                                              ejs-for="PatientData.PincodeId"
                                              maximumSelectionLength="1"
                                              allowFiltering="true"
@@ -257,88 +260,22 @@
                                              dataSource="@Model.Pincodes"
                                              change="onPincodeChange">
 
-                                <e-dropdownlist-fields text="Pincodes" value="Id"></e-dropdownlist-fields>
-                               
-                            </ejs-dropdownlist>
+                                <e-multiselect-fields text="Pincodes" value="Id"></e-multiselect-fields>
+                            </ejs-multiselect>
+
                             <span id="pincodeValidation" class="text-danger"></span>
                         </div>
 
-                        <div class="col-md-6 col-xl-4" id="customPincodeDiv" style="display: none;">
+                        <div class="col-md-6 col-xl-4" id="customPincodeDiv" style="display:none;">
                             <label class="form-label">Pincode*</label>
                             <input asp-for="PatientData.Pincode"
                                    id="custompincode"
                                    type="text"
                                    maxlength="6"
-                                   
                                    class="form-control"
-                                   style="height: 45px;">
+                                   style="height:45px;">
                             <span id="custompincodeValidation" class="text-danger"></span>
                         </div>
-
-
-                        <script>
-                            var pincodeData = [];
-
-                            function onFiltering(args) {
-                                var query = args.text.toLowerCase();
-                                args.updateData(pincodeData.filter(item => item.Pincodes.toLowerCase().includes(query)));
-
-                                setTimeout(function () {
-                                    var popup = document.getElementById("pincodedropdown_popup");
-                                    var customDiv = document.getElementById("customPincodeDiv");
-                                    var dropdownDiv = document.getElementById("referencePincodeDiv");
-
-                                    if (args.text.trim() === "") {
-                                        // If cleared, show dropdown again
-                                        customDiv.style.display = "none";
-                                        dropdownDiv.style.display = "block";
-                                        document.getElementById("custompincode").value = "";
-                                    } else if (popup && popup.querySelector(".e-nodata")) {
-                                        // Show custom input
-                                        dropdownDiv.style.display = "none";
-                                        customDiv.style.display = "block";
-
-                                        var input = document.getElementById("custompincode");
-                                        input.value = args.text;
-                                        input.focus();
-                                        input.setSelectionRange(input.value.length, input.value.length);
-                                    }
-                                }, 300);
-                            }
-
-                            function onPincodeChange(args) {
-                                if (args.value && args.value.length > 0) {
-                                    document.getElementById("referencePincodeDiv").style.display = "block";
-                                    document.getElementById("customPincodeDiv").style.display = "none";
-                                    document.getElementById("custompincode").value = "";
-                                }
-                            }
-
-                          document.addEventListener('DOMContentLoaded', function () {
-    var multiselectObj = document.getElementById("pincodedropdown").ej2_instances[0];
-    
-    // Direct assignment for array-based dataSource
-    pincodeData = multiselectObj.dataSource || [];
-
-    var customInput = document.getElementById("custompincode");
-
-    function checkCustomPincodeEmpty() {
-        if (customInput.value.trim() === "") {
-            document.getElementById("customPincodeDiv").style.display = "none";
-            document.getElementById("referencePincodeDiv").style.display = "block";
-        }
-    }
-
-    // Check on typing
-    customInput.addEventListener("keyup", checkCustomPincodeEmpty);
-
-    // Auto check every 10 seconds
-    setInterval(checkCustomPincodeEmpty, 10000);
-});
-
-
-                        </script>
-
 
                         <div class="col-md-6 col-xl-4">
                             <label class="form-label">Locality</label>
@@ -347,11 +284,296 @@
                                    type="text"
                                    maxlength="50"
                                    class="form-control"
-                                   style="height: 45px;">
-                            <span id="Localityspan" asp-validation-for="PatientData.Address" class="text-danger"></span>
-
+                                   style="height:45px;">
+                            <span id="Localityspan" asp-validation-for="PatientData.Locality" class="text-danger"></span>
                         </div>
 
+                        <script>
+                            var pincodeData = [];
+
+                            document.addEventListener('DOMContentLoaded', function () {
+
+                                var multiObj = document.getElementById("pincodedropdown").ej2_instances[0];
+                                
+                                // Get patient data from server
+                                var patientPincodeId = "@Model.PatientData.PincodeId";
+                                var patientPincode = "@Model.PatientData.Pincode";
+                                var patientLocality = "@Model.PatientData.Locality";
+
+                                // 🔹 Templates
+                                multiObj.itemTemplate = function (data) {
+                                    return `<div>${data.Pincodes} - ${data.LocalityName}</div>`;
+                                };
+
+                                multiObj.valueTemplate = function (data) {
+                                    return `<div>${data.Pincodes} - ${data.LocalityName}</div>`;
+                                };
+
+                                // 🔹 Load datasource once - Get all pincode data
+                                var loadPincodeData = function() {
+                                    if (multiObj.dataSource && typeof multiObj.dataSource.executeQuery === 'function') {
+                                        multiObj.dataSource.executeQuery(new ej.data.Query()).then(function (e) {
+                                            pincodeData = e.result || [];
+                                            console.log("Pincode data loaded:", pincodeData.length);
+                                            // After data is loaded, initialize the selected value
+                                            initializePincodeValue();
+                                        });
+                                    } else {
+                                        // If dataSource is an array directly
+                                        if (Array.isArray(multiObj.dataSource)) {
+                                            pincodeData = multiObj.dataSource;
+                                        } else if (multiObj.dataSource && Array.isArray(multiObj.dataSource.dataSource)) {
+                                            pincodeData = multiObj.dataSource.dataSource;
+                                        }
+                                        // Initialize after data is available
+                                        setTimeout(initializePincodeValue, 100);
+                                    }
+                                };
+
+                                // 🔹 Initialize pincode value from patient data
+                                function initializePincodeValue() {
+                                    // Check if custom pincode exists
+                                    if (patientPincode && patientPincode.trim() !== "" && patientPincode !== "0") {
+                                        // Show custom pincode input
+                                        document.getElementById("customPincodeDiv").style.display = "block";
+                                        document.getElementById("referencePincodeDiv").style.display = "none";
+                                        var customPincodeInput = document.getElementById("custompincode");
+                                        customPincodeInput.value = patientPincode;
+                                        
+                                        // Disable custom pincode field when it has a value (will be enabled on edit)
+                                        customPincodeInput.readOnly = true;
+                                        
+                                        // Clear multiselect value
+                                        multiObj.value = null;
+                                        multiObj.dataBind();
+                                        
+                                        // Set locality if available
+                                        if (patientLocality && patientLocality.trim() !== "") {
+                                            document.getElementById("customlocality").value = patientLocality;
+                                        }
+                                    } 
+                                    // Check if PincodeId exists (dropdown pincode)
+                                    else if (patientPincodeId && patientPincodeId.trim() !== "" && patientPincodeId !== "0") {
+                                        var pincodeIdNum = parseInt(patientPincodeId, 10);
+                                        
+                                        if (!isNaN(pincodeIdNum) && pincodeIdNum > 0) {
+                                            // Wait a bit more if pincodeData is still loading
+                                            if (pincodeData.length === 0) {
+                                                setTimeout(initializePincodeValue, 200);
+                                                return;
+                                            }
+                                            
+                                            // Find the pincode in the data
+                                            var selectedPincode = pincodeData.find(function (item) {
+                                                return item.Id === pincodeIdNum || item.Id == pincodeIdNum || String(item.Id) === String(pincodeIdNum);
+                                            });
+                                            
+                                            if (selectedPincode) {
+                                                // Set the value in multiselect (as array since it's multiselect)
+                                                multiObj.value = [pincodeIdNum];
+                                                multiObj.dataBind();
+                                                multiObj.refresh(); // Refresh to ensure value is displayed
+                                                
+                                                // Auto-fill locality
+                                                if (selectedPincode.LocalityName) {
+                                                    document.getElementById("customlocality").value = selectedPincode.LocalityName;
+                                                } else if (patientLocality && patientLocality.trim() !== "") {
+                                                    document.getElementById("customlocality").value = patientLocality;
+                                                }
+                                                
+                                                // Ensure dropdown is visible
+                                                document.getElementById("referencePincodeDiv").style.display = "block";
+                                                document.getElementById("customPincodeDiv").style.display = "none";
+                                                document.getElementById("custompincode").value = "";
+                                            } else {
+                                                // If pincode not found in data, try to set value anyway (might be server-side binding)
+                                                multiObj.value = [pincodeIdNum];
+                                                multiObj.dataBind();
+                                                multiObj.refresh(); // Refresh to ensure value is displayed
+                                                
+                                                // Set locality if available
+                                                if (patientLocality && patientLocality.trim() !== "") {
+                                                    document.getElementById("customlocality").value = patientLocality;
+                                                }
+                                                
+                                                document.getElementById("referencePincodeDiv").style.display = "block";
+                                                document.getElementById("customPincodeDiv").style.display = "none";
+                                            }
+                                        }
+                                    }
+                                    // If locality exists but no pincode, just set locality
+                                    else if (patientLocality && patientLocality.trim() !== "") {
+                                        document.getElementById("customlocality").value = patientLocality;
+                                    }
+                                }
+
+                                // Load pincode data first
+                                loadPincodeData();
+                                
+                                // Also check if value is already set by server-side binding
+                                setTimeout(function() {
+                                    var currentValue = multiObj.value;
+                                    if (currentValue && (Array.isArray(currentValue) ? currentValue.length > 0 : currentValue)) {
+                                        // Value is already set, just ensure locality is filled
+                                        var selectedId = Array.isArray(currentValue) ? currentValue[0] : currentValue;
+                                        if (selectedId) {
+                                            var selectedPincode = pincodeData.find(function (item) {
+                                                return item.Id === selectedId || item.Id == selectedId || String(item.Id) === String(selectedId);
+                                            });
+                                            
+                                            if (selectedPincode && selectedPincode.LocalityName) {
+                                                var localityInput = document.getElementById("customlocality");
+                                                if (localityInput && (!localityInput.value || localityInput.value.trim() === "")) {
+                                                    localityInput.value = selectedPincode.LocalityName;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    
+                                    // Ensure custom pincode is disabled if it has a value (after initialization)
+                                    var customPincodeInput = document.getElementById("custompincode");
+                                    if (customPincodeInput && customPincodeInput.value && customPincodeInput.value.trim() !== "") {
+                                        customPincodeInput.readOnly = true;
+                                    }
+                                }, 500);
+
+                                // 🔹 Custom pincode key handling
+                                document.getElementById("custompincode").addEventListener("keyup", function () {
+
+                                    var localityInput = document.getElementById("customlocality");
+
+                                    if (this.value.trim() === "") {
+                                        document.getElementById("customPincodeDiv").style.display = "none";
+                                        document.getElementById("referencePincodeDiv").style.display = "block";
+                                        if (localityInput) localityInput.value = "";
+                                    } else {
+                                        if (localityInput) localityInput.value = "";
+                                    }
+                                });
+                            });
+
+                            // 🔍 Filtering (SEARCH WORKS HERE)
+                            function onFiltering(e) {
+                                var query = new ej.data.Query();
+                                var searchText = e.text || "";
+
+                                // If pincodeData is empty, try to get it from the multiselect instance
+                                if (pincodeData.length === 0) {
+                                    var multiObj = document.getElementById("pincodedropdown").ej2_instances[0];
+                                    if (multiObj) {
+                                        if (Array.isArray(multiObj.dataSource)) {
+                                            pincodeData = multiObj.dataSource;
+                                        } else if (multiObj.dataSource && Array.isArray(multiObj.dataSource.dataSource)) {
+                                            pincodeData = multiObj.dataSource.dataSource;
+                                        } else if (multiObj.dataSource && typeof multiObj.dataSource.executeQuery === 'function') {
+                                            multiObj.dataSource.executeQuery(new ej.data.Query()).then(function (result) {
+                                                pincodeData = result.result || [];
+                                                applyFilter(e, pincodeData, searchText);
+                                            });
+                                            return;
+                                        }
+                                    }
+                                }
+
+                                applyFilter(e, pincodeData, searchText);
+                            }
+
+                            function applyFilter(e, data, searchText) {
+                                var query = new ej.data.Query();
+
+                                if (searchText && searchText.trim() !== "") {
+                                    // Convert search text to string for comparison
+                                    var searchLower = searchText.toLowerCase().trim();
+                                    
+                                    // Filter the data manually for better control
+                                    var filteredData = data.filter(function (item) {
+                                        var pincode = String(item.Pincodes || "").toLowerCase();
+                                        var locality = String(item.LocalityName || "").toLowerCase();
+                                        return pincode.includes(searchLower) || locality.includes(searchLower);
+                                    });
+
+                                    // Update with filtered data
+                                    e.updateData(filteredData, query);
+                                } else {
+                                    // Show all data if no search text
+                                    e.updateData(data, query);
+                                }
+
+                                setTimeout(function () {
+                                    var popup = document.getElementById("pincodedropdown_popup");
+
+                                    if (!searchText || searchText.trim() === "") {
+                                        document.getElementById("customPincodeDiv").style.display = "none";
+                                        document.getElementById("referencePincodeDiv").style.display = "block";
+                                        document.getElementById("custompincode").value = "";
+                                    }
+                                    else if (popup && popup.querySelector(".e-nodata")) {
+                                        document.getElementById("referencePincodeDiv").style.display = "none";
+                                        document.getElementById("customPincodeDiv").style.display = "block";
+
+                                        var input = document.getElementById("custompincode");
+                                        input.value = searchText;
+                                        input.focus();
+                                        input.setSelectionRange(input.value.length, input.value.length);
+
+                                        document.getElementById("customlocality").value = "";
+                                    }
+                                }, 200);
+                            }
+
+                            // ✅ Pincode selected → auto-fill locality
+                            function onPincodeChange(args) {
+                                var localityInput = document.getElementById("customlocality");
+                                var selectedValue = args.value;
+
+                                if (selectedValue && selectedValue.length > 0) {
+                                    var selectedId = Array.isArray(selectedValue) ? selectedValue[0] : selectedValue;
+                                    
+                                    // Find the selected pincode data
+                                    var selectedPincode = null;
+                                    
+                                    // Try to get from itemData first
+                                    if (args.itemData) {
+                                        selectedPincode = args.itemData;
+                                    } else {
+                                        // Search in pincodeData
+                                        if (pincodeData.length === 0) {
+                                            var multiObj = document.getElementById("pincodedropdown").ej2_instances[0];
+                                            if (multiObj) {
+                                                if (Array.isArray(multiObj.dataSource)) {
+                                                    pincodeData = multiObj.dataSource;
+                                                } else if (multiObj.dataSource && Array.isArray(multiObj.dataSource.dataSource)) {
+                                                    pincodeData = multiObj.dataSource.dataSource;
+                                                }
+                                            }
+                                        }
+                                        
+                                        selectedPincode = pincodeData.find(function (item) {
+                                            return item.Id === selectedId || item.Id == selectedId;
+                                        });
+                                    }
+
+                                    if (selectedPincode) {
+                                        document.getElementById("referencePincodeDiv").style.display = "block";
+                                        document.getElementById("customPincodeDiv").style.display = "none";
+                                        document.getElementById("custompincode").value = "";
+
+                                        if (localityInput) {
+                                            localityInput.value = selectedPincode.LocalityName || "";
+                                        }
+                                    }
+                                } else {
+                                    // Clear locality if pincode is cleared
+                                    if (localityInput) {
+                                        localityInput.value = "";
+                                    }
+                                }
+                            }
+                        </script>
+
+
+
+                       
                         <div class="col-md-6 col-xl-4">
                             <label for="pi-address" class="form-label">Address</label>
                             <textarea type="text" name="address" style="min-height:45px;" asp-for="PatientData.Address" id="pi-address" class="form-control"> </textarea>
@@ -417,7 +639,7 @@
                             @if (pendingBalance > 0)
                             {
                                 <label for="invoice-amount" class="form-label me-2">Payment Balance:</label>
-                                <span id="invoice-amount" class="pa-amt">@ViewData["Invoice"]</span>
+                                <span id="invoice-amount" class="pa-amt">@pendingBalance</span>
                             }
                             </div>
     
@@ -864,6 +1086,35 @@
             </div>
         </div>
     </div>
+   
+    <script>
+        function roundToNearest15(date) {
+            const interval = 15 * 60 * 1000; // 15 minutes
+            return new Date(Math.round(date.getTime() / interval) * interval);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+
+            const pickerEl = document.getElementById("pi-resched");
+            if (!pickerEl || !pickerEl.ej2_instances) return;
+
+            const picker = pickerEl.ej2_instances[0];
+            let isInternalUpdate = false;
+
+            picker.change = function (args) {
+                if (!args.value || isInternalUpdate) return;
+
+                const rounded = roundToNearest15(new Date(args.value));
+
+                if (+rounded !== +args.value) {
+                    isInternalUpdate = true;
+                    picker.value = rounded;
+                    picker.dataBind();
+                    isInternalUpdate = false;
+                }
+            };
+        });
+    </script>
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             var OCModalEl = document.getElementById('app-resched');
@@ -911,6 +1162,32 @@
             </div>
         </div>
     </div>
+    <script>
+      
+
+        document.addEventListener('DOMContentLoaded', function () {
+
+            const pickerEl = document.getElementById("OC-resched");
+            if (!pickerEl || !pickerEl.ej2_instances) return;
+
+            const picker = pickerEl.ej2_instances[0];
+            let isInternalUpdate = false;
+
+            picker.change = function (args) {
+                if (!args.value || isInternalUpdate) return;
+
+                const rounded = roundToNearest15(new Date(args.value));
+
+                if (+rounded !== +args.value) {
+                    isInternalUpdate = true;
+                    picker.value = rounded;
+                    picker.dataBind();
+                    isInternalUpdate = false;
+                }
+            };
+        });
+    </script>
+
     <script>
         $(document).ready(function () {
             $('#oConsultationModal').on('hidden.bs.modal', function () {
@@ -1142,6 +1419,33 @@
             </div>
         </div>
     </div>
+    <script>
+       
+
+        document.addEventListener('DOMContentLoaded', function () {
+
+            const pickerEl = document.getElementById("RP-resched");
+            if (!pickerEl || !pickerEl.ej2_instances) return;
+
+            const picker = pickerEl.ej2_instances[0];
+            let isInternalUpdate = false;
+
+            picker.change = function (args) {
+                if (!args.value || isInternalUpdate) return;
+
+                const rounded = roundToNearest15(new Date(args.value));
+
+                if (+rounded !== +args.value) {
+                    isInternalUpdate = true;
+                    picker.value = rounded;
+                    picker.dataBind();
+                    isInternalUpdate = false;
+                }
+            };
+        });
+    </script>
+
+
     <script>
         $(document).ready(function () {
             $('#cosmeticProcModel').on('hidden.bs.modal', function () {
@@ -1422,6 +1726,26 @@
         function loadSchedulerData() {
             var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
             var holidays = @Html.Raw(Json.Serialize(Model.Holidays));
+            var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves)); // <-- ADD THIS
+
+            var selectedDoctorId = 1;
+            var holidayDates = holidays.map(function (item) {
+                var d = new Date(item.startDate);
+                return d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, '0') + "-" +
+                    String(d.getDate()).padStart(2, '0');
+            });
+
+            var doctorLeaveDates = doctorLeaves
+                .filter(x => x.doctorId === selectedDoctorId)
+                .map(function (x) {
+                    var d = new Date(x.startDateTime);
+                    return d.getFullYear() + "-" +
+                        String(d.getMonth() + 1).padStart(2, '0') + "-" +
+                        String(d.getDate()).padStart(2, '0');
+                });
+            console.log("Holiday Dates:", holidayDates);
+            console.log("Doctor Leave Dates:", doctorLeaveDates);
             var holidayDates = holidays.map(function (item) {
                 return new Date(item.startDate).toISOString().split('T')[0];
             });
@@ -1455,6 +1779,10 @@
                         if (holidayDates.includes(cellDate)) {
                             args.element.classList.add("e-disabled", "holiday-cell");
                         }
+                        // If doctor leave → block
+                        if (doctorLeaveDates.includes(cellDate)) {
+                            args.element.classList.add("e-disabled", "doctor-leave-cell");
+                        }
                     }
                 };
 
@@ -1471,7 +1799,17 @@
                         CategoryColor: isPatientAppointment ? '#28a745' : '#0061AB'
                     };
                 });
-
+                // ADD → block full day if doctor is on leave
+                doctorLeaveDates.forEach(function (date) {
+                    blockAppointments.push({
+                        Id: "LV-" + date,
+                        Subject: "Doctor Leave",
+                        StartTime: new Date(date + "T00:00:00"),
+                        EndTime: new Date(date + "T23:59:00"),
+                        IsReadonly: true,
+                        CategoryColor: "#ff0000"  // Red color for leave block
+                    });
+                });
                 console.log("Final Event Data for Scheduler:", blockAppointments);
 
                 scheduleObj.eventSettings.dataSource = [];
@@ -1642,10 +1980,26 @@
             debugger;
             var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
             var holidays = @Html.Raw(Json.Serialize(Model.Holidays));
+            var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves)); // <-- ADD THIS
+
+            var selectedDoctorId = 1;
             var holidayDates = holidays.map(function (item) {
-                return new Date(item.startDate).toISOString().split('T')[0]; // Convert to YYYY-MM-DD
+                var d = new Date(item.startDate);
+                return d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, '0') + "-" +
+                    String(d.getDate()).padStart(2, '0');
             });
 
+            var doctorLeaveDates = doctorLeaves
+                .filter(x => x.doctorId === selectedDoctorId)
+                .map(function (x) {
+                    var d = new Date(x.startDateTime);
+                    return d.getFullYear() + "-" +
+                        String(d.getMonth() + 1).padStart(2, '0') + "-" +
+                        String(d.getDate()).padStart(2, '0');
+                });
+            console.log("Holiday Dates:", holidayDates);
+            console.log("Doctor Leave Dates:", doctorLeaveDates);
 
             if (!doctorBlockTimes || doctorBlockTimes.length === 0) {
                 console.log("No blocked appointments found.");
@@ -1667,6 +2021,10 @@
                         if (holidayDates.includes(cellDate)) {
                             args.element.classList.add("e-disabled", "holiday-cell"); // Apply custom class
                         }
+                        // If doctor leave → block
+                        if (doctorLeaveDates.includes(cellDate)) {
+                            args.element.classList.add("e-disabled", "doctor-leave-cell");
+                        }
                     }
                 };
                 // Convert data to Scheduler format
@@ -1682,7 +2040,19 @@
                         CategoryColor: isPatientAppointment ? '#28a745' : '#0061AB'  // Green for patient, Red for normal
                     };
                 });
+                // ADD → block full day if doctor is on leave
+                doctorLeaveDates.forEach(function (date) {
+                    blockAppointments.push({
+                        Id: "LV-" + date,
+                        Subject: "Doctor Leave",
+                        StartTime: new Date(date + "T00:00:00"),
+                        EndTime: new Date(date + "T23:59:00"),
+                        IsReadonly: true,
+                        CategoryColor: "#ff0000"  // Red color for leave block
+                    });
+                });
 
+                
                 scheduleObj.eventSettings.template = function (data) {
                     var subject = data.Subject || '';
                     var color = data.CategoryColor || '#0061AB';
@@ -1967,7 +2337,7 @@
         });
 
     </script>
-
+    
 
 
     <!-- Add Appointment - Modal -->
@@ -2242,7 +2612,7 @@
 
         let fieldsToEnable = [
             "pi-name", "pi-email", "pi-age",
-            "gender-male", "gender-female", "gender-other", "pi-matstat", "pi-address","customlocality",
+            "gender-male", "gender-female", "gender-other", "pi-matstat", "pi-address","customlocality", "custompincode",
         ];
 
         function toggleFields(enable) {
@@ -2265,6 +2635,86 @@
             let PincodeDropdown = document.getElementById("pincodedropdown").ej2_instances[0];
             if (PincodeDropdown) {
                 PincodeDropdown.enabled = enable;
+                // When enabling, ensure value is properly set and displayed
+                if (enable) {
+                    setTimeout(function() {
+                        // Get patient data
+                        var patientPincodeId = "@Model.PatientData.PincodeId";
+                        var patientPincode = "@Model.PatientData.Pincode";
+                        var patientLocality = "@Model.PatientData.Locality";
+                        
+                        // Check if custom pincode should be shown
+                        if (patientPincode && patientPincode.trim() !== "" && patientPincode !== "0") {
+                            // Show custom pincode, hide dropdown
+                            document.getElementById("customPincodeDiv").style.display = "block";
+                            document.getElementById("referencePincodeDiv").style.display = "none";
+                            var customPincodeInput = document.getElementById("custompincode");
+                            customPincodeInput.value = patientPincode;
+                            // Enable custom pincode field in edit mode
+                            customPincodeInput.readOnly = false;
+                            if (patientLocality && patientLocality.trim() !== "") {
+                                document.getElementById("customlocality").value = patientLocality;
+                            }
+                        } else if (patientPincodeId && patientPincodeId.trim() !== "" && patientPincodeId !== "0") {
+                            // Show dropdown with selected pincode
+                            var pincodeIdNum = parseInt(patientPincodeId, 10);
+                            if (!isNaN(pincodeIdNum) && pincodeIdNum > 0) {
+                                // Get current value
+                                var currentValue = PincodeDropdown.value;
+                                
+                                // Set value as array (multiselect requirement)
+                                var shouldSetValue = true;
+                                if (Array.isArray(currentValue) && currentValue.length > 0) {
+                                    if (currentValue[0] === pincodeIdNum || currentValue[0] == pincodeIdNum) {
+                                        shouldSetValue = false;
+                                    }
+                                }
+                                
+                                if (shouldSetValue) {
+                                    PincodeDropdown.value = [pincodeIdNum];
+                                }
+                                
+                                // Ensure dropdown is visible
+                                document.getElementById("referencePincodeDiv").style.display = "block";
+                                document.getElementById("customPincodeDiv").style.display = "none";
+                                
+                                // Refresh and bind
+                                PincodeDropdown.dataBind();
+                                PincodeDropdown.refresh();
+                                
+                                // Set locality if available
+                                if (patientLocality && patientLocality.trim() !== "") {
+                                    var localityInput = document.getElementById("customlocality");
+                                    if (localityInput) {
+                                        localityInput.value = patientLocality;
+                                    }
+                                        } else {
+                                            // Try to get locality from pincode data
+                                            var pincodeDataLocal = [];
+                                            if (PincodeDropdown.dataSource) {
+                                                if (Array.isArray(PincodeDropdown.dataSource)) {
+                                                    pincodeDataLocal = PincodeDropdown.dataSource;
+                                                } else if (PincodeDropdown.dataSource && Array.isArray(PincodeDropdown.dataSource.dataSource)) {
+                                                    pincodeDataLocal = PincodeDropdown.dataSource.dataSource;
+                                                }
+                                            }
+                                            
+                                            if (pincodeDataLocal.length > 0) {
+                                                var selectedPincode = pincodeDataLocal.find(function (item) {
+                                                    return item.Id === pincodeIdNum || item.Id == pincodeIdNum || String(item.Id) === String(pincodeIdNum);
+                                                });
+                                                if (selectedPincode && selectedPincode.LocalityName) {
+                                                    var localityInput = document.getElementById("customlocality");
+                                                    if (localityInput) {
+                                                        localityInput.value = selectedPincode.LocalityName;
+                                                    }
+                                                }
+                                            }
+                                        }
+                            }
+                        }
+                    }, 150);
+                }
             }   
             let cityDropdown = document.getElementById("cityDropdown").ej2_instances[0];
             if (cityDropdown) {
@@ -2368,7 +2818,8 @@
 
             // Validate Locality
             var localityValue = $("#customlocality").val().trim();
-            var localityPattern = /^[a-zA-Z\s]+$/;
+            var localityPattern = /^[a-zA-Z0-9\s]+$/;
+
 
             if (localityValue !== "") {
 
@@ -2513,10 +2964,42 @@
             var cityObj = document.getElementById("cityDropdown").ej2_instances[0];
             var cityId = cityObj.value;
             var custompincode = $("#custompincode").val();
+            
+            // Fix: Extract single value from array (Multiselect returns array even with maxSelectionLength=1)
             var selectedPincodeId = multiselectObj.value;
-            var PincodeId = selectedPincodeId ;
-
-          
+            var PincodeId = null;
+            
+            // Check if custom pincode is being used
+            var isCustomPincodeVisible = $("#customPincodeDiv").is(":visible");
+            
+            if (isCustomPincodeVisible) {
+                // If custom pincode is visible, set PincodeId to null (custom pincode will be used)
+                PincodeId = null;
+            } else {
+                // Extract single value from array if it's an array
+                if (Array.isArray(selectedPincodeId)) {
+                    if (selectedPincodeId.length > 0) {
+                        PincodeId = selectedPincodeId[0];
+                    } else {
+                        PincodeId = null;
+                    }
+                } else if (selectedPincodeId !== null && selectedPincodeId !== undefined && selectedPincodeId !== "") {
+                    // If it's already a single value, use it directly
+                    PincodeId = selectedPincodeId;
+                } else {
+                    PincodeId = null;
+                }
+            }
+            
+            // Ensure PincodeId is a number or null (not undefined or empty string)
+            if (PincodeId === "" || PincodeId === undefined) {
+                PincodeId = null;
+            } else if (PincodeId !== null) {
+                PincodeId = parseInt(PincodeId, 10);
+                if (isNaN(PincodeId)) {
+                    PincodeId = null;
+                }
+            }
 
 // Get Locality
             var localityValue = $("#customlocality").val().trim();
@@ -2708,7 +3191,14 @@
     }
 
     .holiday-cell {
-        background-color: #dee2e6 !important; /* Light red */
+        background-color: #e9ecef !important; /* Light red */
+        color: #721c24 !important;
+        pointer-events: none; /* Disable clicks */
+        opacity: 0.6; /* Make it look inactive */
+    }
+
+    .doctor-leave-cell {
+        background-color: #e9ecef !important; /* Light red */
         color: #721c24 !important;
         pointer-events: none; /* Disable clicks */
         opacity: 0.6; /* Make it look inactive */
@@ -2798,7 +3288,9 @@
         left: 0 !important;
     }
 
-
+    .e-appointment.e-read-only {
+        background: none !important;
+    }
 
     .e-quick-popup-wrapper.e-lib.e-popup.e-control.e-popup-open {
         display: none;

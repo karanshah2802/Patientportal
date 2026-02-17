@@ -11,6 +11,27 @@
     document.addEventListener("DOMContentLoaded", function () {
         var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
         var holidays = @Html.Raw(Json.Serialize(Model.Holidays));
+        var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves)); // <-- ADD THIS
+
+        var selectedDoctorId = 1;
+        var holidayDates = holidays.map(function (item) {
+            var d = new Date(item.startDate);
+            return d.getFullYear() + "-" +
+                String(d.getMonth() + 1).padStart(2, '0') + "-" +
+                String(d.getDate()).padStart(2, '0');
+        });
+
+        var doctorLeaveDates = doctorLeaves
+            .filter(x => x.doctorId === selectedDoctorId)
+            .map(function (x) {
+                var d = new Date(x.startDateTime);
+                return d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, '0') + "-" +
+                    String(d.getDate()).padStart(2, '0');
+            });
+
+        console.log("Holiday Dates:", holidayDates);
+        console.log("Doctor Leave Dates:", doctorLeaveDates);
 
         if (doctorBlockTimes.length === 0) {
             console.log("No blocked appointments found.");
@@ -38,8 +59,23 @@
                 if (holidayDates.includes(cellDate)) {
                     args.element.classList.add("e-disabled", "holiday-cell"); // Apply custom class
                 }
+                // If doctor leave → block
+                if (doctorLeaveDates.includes(cellDate)) {
+                    args.element.classList.add("e-disabled", "doctor-leave-cell");
+                }
             }
         };
+        // ADD → block full day if doctor is on leave
+        doctorLeaveDates.forEach(function (date) {
+            blockAppointments.push({
+                Id: "LV-" + date,
+                Subject: "Doctor Leave",
+                StartTime: new Date(date + "T00:00:00"),
+                EndTime: new Date(date + "T23:59:00"),
+                IsReadonly: true,
+                CategoryColor: "#ff0000"  // Red color for leave block
+            });
+        });
         // Debugging output
         console.log("Final Event Data for Scheduler:", blockAppointments);
 
@@ -149,6 +185,13 @@
 
     .e-appointment.e-read-only {
         left: 0 !important;
+    }
+
+    .doctor-leave-cell {
+        background-color: #e9ecef !important; /* Light red */
+        color: #721c24 !important;
+        pointer-events: none; /* Disable clicks */
+        opacity: 0.6; /* Make it look inactive */
     }
 
     .schedule-wrapper {

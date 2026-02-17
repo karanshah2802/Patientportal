@@ -15,7 +15,7 @@ namespace Patientportal.Pages.Calendar
         private readonly IConfiguration _configuration;
         public List<AppointmentListItem> Doctorblocktime { get; set; } = new List<AppointmentListItem>();
         public List<Holidays> Holidays { get; set; } = new List<Holidays>();
-
+        public List<Leave> Leaves { get; set; } = new List<Leave>();
 
         public string? EjsDateTimePattern = "dd/MM/yyyy hh:mm:ss a";
         public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration)
@@ -32,9 +32,10 @@ namespace Patientportal.Pages.Calendar
 
             string apiUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
-
+            string apileavlist = $"{baseUrl}/api/v1/Holiday/getLeaveList";
             Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>();
             Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl, token) ?? new List<Holidays>();
+            Leaves = await _apiService.GetAsync<List<Leave>>(apileavlist, token) ?? new List<Leave>();
             //foreach (var appointment in Doctorblocktime)
             //{
             //    if (appointment.AppointmentStartTime != null)
@@ -48,12 +49,12 @@ namespace Patientportal.Pages.Calendar
             //    }
             //}
 
-        
-        
-        
-        
-        
-        
+
+
+
+
+
+
         }
         public async Task OnGetCalendarAsync()
         {
