@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model Patientportal.Pages.Patient.IndexModel
 @{
     ViewData["Title"] = "Patient Portal";
@@ -10,7 +10,7 @@
     toolbarItems.Add("Search");
 
 
-    List<string> MaritalStatusList = new List<string> { "Single", "Married", "Divorced" };
+    List<string> MaritalStatusList = new List<string> { "Single", "Married" };
 
     var pendingBalance = 0m;
 
@@ -580,24 +580,22 @@
                             <span asp-validation-for="PatientData.Address" class="text-danger"></span>
 
                         </div>
-
                         <div class="col-md-6 col-xl-4">
-                            <label for="pi-city" class="form-label">City<span id="cityRequired"></span></label>
-                            <ejs-dropdownlist id="cityDropdown"
+                            <label for="pi-country" class="form-label">Country</label>
+                            <ejs-dropdownlist id="countryDropdown"
+                                              ejs-for="PatientData.Country"
                                               style="height: 45px;"
-                                              ejs-for="PatientData.City"
                                               cssClass="e-multi-column"
                                               popupHeight="300px"
                                               showClearButton="true"
-                                              value="@Model.PatientData.City"
-                                              dataSource="@Model.CityLists">
-                                <!-- Initially disabled until a state is selected -->
-                                <e-dropdownlist-fields text="name" value="id"></e-dropdownlist-fields>
+                                              dataSource="@Model.CountryLists"
+                                              change="onCountryChange">
+                                <!-- Add the change event -->
+                                <e-dropdownlist-fields text="Name" value="Id"></e-dropdownlist-fields>
                             </ejs-dropdownlist>
-                            <span id="cityvalidation" asp-validation-for="PatientData.City" class="text-danger"></span>
-
+                            <span asp-validation-for="PatientData.Country" class="text-danger"></span>
                         </div>
-
+                      
                         <div class="col-md-6 col-xl-4">
                             <label for="pi-state" class="form-label">State<span id="stateRequired"></span></label>
                             <ejs-dropdownlist id="stateDropdown"
@@ -615,22 +613,24 @@
                             @*  <ejs-dropdownlist ID="pi-state" class="form-control"  TValue="string" DataSource="StateList" Placeholder="Select State"></ejs-dropdownlist>
                             *@
                         </div>
-
                         <div class="col-md-6 col-xl-4">
-                            <label for="pi-country" class="form-label">Country</label>
-                            <ejs-dropdownlist id="countryDropdown"
-                                              ejs-for="PatientData.Country"
+                            <label for="pi-city" class="form-label">City<span id="cityRequired"></span></label>
+                            <ejs-dropdownlist id="cityDropdown"
                                               style="height: 45px;"
+                                              ejs-for="PatientData.City"
                                               cssClass="e-multi-column"
                                               popupHeight="300px"
                                               showClearButton="true"
-                                              dataSource="@Model.CountryLists"
-                                              change="onCountryChange">
-                                <!-- Add the change event -->
-                                <e-dropdownlist-fields text="Name" value="Id"></e-dropdownlist-fields>
+                                              value="@Model.PatientData.City"
+                                              dataSource="@Model.CityLists">
+                                <!-- Initially disabled until a state is selected -->
+                                <e-dropdownlist-fields text="name" value="id"></e-dropdownlist-fields>
                             </ejs-dropdownlist>
-                            <span asp-validation-for="PatientData.Country" class="text-danger"></span>
+                            <span id="cityvalidation" asp-validation-for="PatientData.City" class="text-danger"></span>
+
                         </div>
+
+                        
                     </div>
 
                     <div class="form-actions d-flex justify-content-between align-items-center flex-wrap">
@@ -1288,9 +1288,9 @@
                         $("#OC-reschedSpan").text("Invalid Appointment Date Time.");
                         isValid = false;
                     }
-                    else if (enteredDateTime.getDay() === 0 || enteredDateTime.getDay() === 6) {
+                    else if (enteredDateTime.getDay() === 0) {
 
-                        $("#OC-reschedSpan").text("Appointments cannot be scheduled on weekends.");
+                        $("#OC-reschedSpan").text("Appointments cannot be scheduled on Sunday.");
                         isValid = false;
                     } else if (enteredHour < startHour || (enteredHour === endHour && enteredMinutes > 0) || enteredHour > endHour) {
                         $("#OC-reschedSpan").text("Appointment time should be between 10 AM and 7 PM.");
@@ -1542,9 +1542,9 @@
                         $("#RP-reschedSpan").text("Appointment must be at least 30 minutes from now.");
                         isValid = false;
                     }
-                    else if (enteredDateTime.getDay() === 0 || enteredDateTime.getDay() === 6) {
+                    else if (enteredDateTime.getDay() === 0) {
 
-                        $("#RP-reschedSpan").text("Appointments cannot be scheduled on weekends.");
+                        $("#RP-reschedSpan").text("Appointments cannot be scheduled on Sunday.");
                         isValid = false;
                     } else if (enteredHour < startHour || (enteredHour === endHour && enteredMinutes > 0) || enteredHour > endHour) {
                         $("#RP-reschedSpan").text("Appointment time should be between 10 AM and 7 PM.");
@@ -1677,7 +1677,7 @@
                                           selectedDate="DateTime.Today"
                                           allowDragAndDrop="false" allowResizing="false"
                                           startHour="10:00" endHour="19:15"
-                                          workDays="new int[] {1, 2, 3, 4, 5}"
+                                          workDays="new int[] {1, 2, 3, 4, 5, 6}"
                                           cellClick="onCellClick" showQuickInfo="false">
                                 <e-schedule-views>
                                     <e-schedule-view option="Day"></e-schedule-view>
@@ -1736,16 +1736,18 @@
                     String(d.getDate()).padStart(2, '0');
             });
 
-            var doctorLeaveDates = doctorLeaves
+            var doctorLeaveSlots = doctorLeaves
                 .filter(x => x.doctorId === selectedDoctorId)
                 .map(function (x) {
-                    var d = new Date(x.startDateTime);
-                    return d.getFullYear() + "-" +
-                        String(d.getMonth() + 1).padStart(2, '0') + "-" +
-                        String(d.getDate()).padStart(2, '0');
+                    return {
+                        start: new Date(x.startDateTime),
+                        end: new Date(x.endDateTime || x.startDateTime)
+                    };
                 });
             console.log("Holiday Dates:", holidayDates);
-            console.log("Doctor Leave Dates:", doctorLeaveDates);
+            console.log("Doctor Leave Slots:", doctorLeaveSlots);
+            // Global for main scheduler click blocking
+            window.patientDoctorLeaveSlots = doctorLeaveSlots;
             var holidayDates = holidays.map(function (item) {
                 return new Date(item.startDate).toISOString().split('T')[0];
             });
@@ -1779,9 +1781,14 @@
                         if (holidayDates.includes(cellDate)) {
                             args.element.classList.add("e-disabled", "holiday-cell");
                         }
-                        // If doctor leave → block
-                        if (doctorLeaveDates.includes(cellDate)) {
-                            args.element.classList.add("e-disabled", "doctor-leave-cell");
+                        // Doctor 1 leave slots -> gray within time range
+                        if (Array.isArray(window.patientDoctorLeaveSlots)) {
+                            var inLeave = window.patientDoctorLeaveSlots.some(function (slot) {
+                                return args.date >= slot.start && args.date < slot.end;
+                            });
+                            if (inLeave) {
+                                args.element.classList.add("e-disabled", "doctor-leave-cell");
+                            }
                         }
                     }
                 };
@@ -1799,13 +1806,13 @@
                         CategoryColor: isPatientAppointment ? '#28a745' : '#0061AB'
                     };
                 });
-                // ADD → block full day if doctor is on leave
-                doctorLeaveDates.forEach(function (date) {
+                // Block only leave time range (not full day)
+                doctorLeaveSlots.forEach(function (slot) {
                     blockAppointments.push({
-                        Id: "LV-" + date,
+                        Id: "LV-" + slot.start.toISOString(),
                         Subject: "Doctor Leave",
-                        StartTime: new Date(date + "T00:00:00"),
-                        EndTime: new Date(date + "T23:59:00"),
+                        StartTime: slot.start,
+                        EndTime: slot.end,
                         IsReadonly: true,
                         CategoryColor: "#ff0000"  // Red color for leave block
                     });
@@ -1866,13 +1873,23 @@
                 return; // Stop execution (No further action)
             }
 
+            // Sunday never clickable
             var clickedDate = new Date(args.startTime);
-            var day = clickedDate.getDay(); // 0 = Sunday, 6 = Saturday
-
-            // अगर क्लिक किया गया दिन Saturday या Sunday है तो क्लिक disable कर दो
-            if (day === 0 || day === 6) {
-                args.cancel = true; // Click event cancel करो
+            var day = clickedDate.getDay();
+            if (day === 0) {
+                args.cancel = true;
                 return;
+            }
+
+            // अगर clicked time Doctor 1 के leave slot में है, तो disable
+            if (Array.isArray(window.patientDoctorLeaveSlots)) {
+                var inLeave = window.patientDoctorLeaveSlots.some(function (slot) {
+                    return clickedDateTime >= slot.start && clickedDateTime < slot.end;
+                });
+                if (inLeave) {
+                    args.cancel = true;
+                    return;
+                }
             }
 
             // Get the clicked slot's start time
@@ -1950,7 +1967,7 @@
                                           selectedDate="DateTime.Today"
                                           allowDragAndDrop="false" allowResizing="false"
                                           startHour="10:00" endHour="19:15"
-                                          workDays="new int[] {1, 2, 3, 4, 5}"
+                                          workDays="new int[] {1, 2, 3, 4, 5, 6}"
                                           cellClick="onCellClick2" showQuickInfo="false">
                                 <e-schedule-views>
                                     <e-schedule-view option="Day"></e-schedule-view>
@@ -1990,16 +2007,18 @@
                     String(d.getDate()).padStart(2, '0');
             });
 
-            var doctorLeaveDates = doctorLeaves
+            var doctorLeaveSlots = doctorLeaves
                 .filter(x => x.doctorId === selectedDoctorId)
                 .map(function (x) {
-                    var d = new Date(x.startDateTime);
-                    return d.getFullYear() + "-" +
-                        String(d.getMonth() + 1).padStart(2, '0') + "-" +
-                        String(d.getDate()).padStart(2, '0');
+                    return {
+                        start: new Date(x.startDateTime),
+                        end: new Date(x.endDateTime || x.startDateTime)
+                    };
                 });
             console.log("Holiday Dates:", holidayDates);
-            console.log("Doctor Leave Dates:", doctorLeaveDates);
+            console.log("Doctor Leave Slots:", doctorLeaveSlots);
+            // Global for second scheduler click blocking
+            window.patientDoctorLeaveSlots2 = doctorLeaveSlots;
 
             if (!doctorBlockTimes || doctorBlockTimes.length === 0) {
                 console.log("No blocked appointments found.");
@@ -2021,9 +2040,14 @@
                         if (holidayDates.includes(cellDate)) {
                             args.element.classList.add("e-disabled", "holiday-cell"); // Apply custom class
                         }
-                        // If doctor leave → block
-                        if (doctorLeaveDates.includes(cellDate)) {
-                            args.element.classList.add("e-disabled", "doctor-leave-cell");
+                        // Doctor 1 leave slots -> gray within time range
+                        if (Array.isArray(window.patientDoctorLeaveSlots2)) {
+                            var inLeave = window.patientDoctorLeaveSlots2.some(function (slot) {
+                                return args.date >= slot.start && args.date < slot.end;
+                            });
+                            if (inLeave) {
+                                args.element.classList.add("e-disabled", "doctor-leave-cell");
+                            }
                         }
                     }
                 };
@@ -2040,13 +2064,13 @@
                         CategoryColor: isPatientAppointment ? '#28a745' : '#0061AB'  // Green for patient, Red for normal
                     };
                 });
-                // ADD → block full day if doctor is on leave
-                doctorLeaveDates.forEach(function (date) {
+                // Block only leave time range (not full day)
+                doctorLeaveSlots.forEach(function (slot) {
                     blockAppointments.push({
-                        Id: "LV-" + date,
+                        Id: "LV-" + slot.start.toISOString(),
                         Subject: "Doctor Leave",
-                        StartTime: new Date(date + "T00:00:00"),
-                        EndTime: new Date(date + "T23:59:00"),
+                        StartTime: slot.start,
+                        EndTime: slot.end,
                         IsReadonly: true,
                         CategoryColor: "#ff0000"  // Red color for leave block
                     });
@@ -2117,12 +2141,23 @@
                 return;
             }
 
+            // Sunday never clickable
             var clickedDate = new Date(args.startTime);
             var day = clickedDate.getDay();
-
-            if (day === 0 || day === 6) {
+            if (day === 0) {
                 args.cancel = true;
                 return;
+            }
+
+            // Doctor 1 leave slot ke andar ho to click disable
+            if (Array.isArray(window.patientDoctorLeaveSlots2)) {
+                var inLeave = window.patientDoctorLeaveSlots2.some(function (slot) {
+                    return clickedDateTime >= slot.start && clickedDateTime < slot.end;
+                });
+                if (inLeave) {
+                    args.cancel = true;
+                    return;
+                }
             }
 
             let startTime = args.startTime;
@@ -2237,9 +2272,9 @@
                         $("#AptDatetime-reson").text("Appointment must be at least 30 minutes from now.");
                         isValid = false;
                     }
-                    else if (enteredDateTime.getDay() === 0 || enteredDateTime.getDay() === 6) {
+                    else if (enteredDateTime.getDay() === 0) {
 
-                        $("#AptDatetime-reson").text("Appointments cannot be scheduled on weekends.");
+                        $("#AptDatetime-reson").text("Appointments cannot be scheduled on Sunday.");
                         isValid = false;
                     } else if (enteredHour < startHour || (enteredHour === endHour && enteredMinutes > 0) || enteredHour > endHour) {
                         $("#AptDatetime-reson").text("Appointment time should be between 10 AM and 7 PM.");
@@ -2453,9 +2488,9 @@
                         $("#AptDatetimereson1").text("Appointment must be at least 30 minutes from now.");
                         isValid = false;
                     }
-                    else if (enteredDateTime.getDay() === 0 || enteredDateTime.getDay() === 6) {
+                    else if (enteredDateTime.getDay() === 0) {
 
-                        $("#AptDatetimereson1").text("Appointments cannot be scheduled on weekends.");
+                        $("#AptDatetimereson1").text("Appointments cannot be scheduled on Sunday.");
                         isValid = false;
                     } else if (enteredHour < startHour || (enteredHour === endHour && enteredMinutes > 0) || enteredHour > endHour) {
                         $("#AptDatetimereson1").text("Appointment time should be between 10 AM and 7 PM.");

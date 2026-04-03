@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model Patientportal.Pages.IndexModel
 @{
     ViewData["Title"] = "Patient Portal";
@@ -10,7 +10,7 @@
     toolbarItems.Add("Search");
 
 
-    List<string> MaritalStatusList = new List<string> { "Single", "Married", "Divorced" };
+    List<string> MaritalStatusList = new List<string> { "Single", "Married"};
 
 }
 @Html.AntiForgeryToken()
@@ -997,7 +997,7 @@
                                           selectedDate="DateTime.Today"
                                           allowDragAndDrop="false" allowResizing="false"
                                           startHour="10:00" endHour="19:15"
-                                          workDays="new int[] {1, 2, 3, 4, 5}"
+                                          workDays="new int[] {1, 2, 3, 4, 5, 6}"
                                           cellClick="onCellClick" showQuickInfo="false">
                                 <e-schedule-views>
                                     <e-schedule-view option="Day"></e-schedule-view>
@@ -1105,8 +1105,8 @@
             var clickedDate = new Date(args.startTime);
             var day = clickedDate.getDay(); // 0 = Sunday, 6 = Saturday
 
-            // अगर क्लिक किया गया दिन Saturday या Sunday है तो क्लिक disable कर दो
-            if (day === 0 || day === 6) {
+            // अगर क्लिक किया गया दिन Sunday है तो क्लिक disable कर दो
+            if (day === 0) {
                 args.cancel = true; // Click event cancel करो
                 return;
             }
@@ -1188,7 +1188,7 @@
                                           selectedDate="DateTime.Today"
                                           allowDragAndDrop="false" allowResizing="false"
                                           startHour="10:00" endHour="19:15"
-                                          workDays="new int[] {1, 2, 3, 4, 5}"
+                                          workDays="new int[] {1, 2, 3, 4, 5, 6}"
                                           cellClick="onCellClick2" showQuickInfo="false">
                                 <e-schedule-views>
                                     <e-schedule-view option="Day"></e-schedule-view>
@@ -1306,7 +1306,7 @@
             var clickedDate = new Date(args.startTime);
             var day = clickedDate.getDay();
 
-            if (day === 0 || day === 6) {
+            if (day === 0) {
                 args.cancel = true;
                 return;
             }

@@ -88,41 +88,10 @@ td.e-timeline-wrapper {
 /*
 ** Fonts
 */
-@font-face {
-    font-family: 'manrope';
-    src: url('../fonts/Manrope-Regular.woff2') format('woff2'),
-        url('../fonts/Manrope-Regular.woff') format('woff');
-    font-weight: normal;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'manrope-md';
-    src: url('../fonts/Manrope-Medium.woff2') format('woff2'),
-        url('../fonts/Manrope-Medium.woff') format('woff');
-    font-weight: 500;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'manrope-sb';
-    src: url('../fonts/Manrope-SemiBold.woff2') format('woff2'),
-        url('../fonts/Manrope-SemiBold.woff') format('woff');
-    font-weight: 600;
-    font-style: normal;
-    font-display: swap;
-}
-
-@font-face {
-    font-family: 'manrope-bd';
-    src: url('../fonts/Manrope-Bold.woff2') format('woff2'),
-        url('../fonts/Manrope-Bold.woff') format('woff');
-    font-weight: bold;
-    font-style: normal;
-    font-display: swap;
-}
+@font-face { font-family: 'manrope'; src: local('Arial'); font-weight: normal; font-style: normal; }
+@font-face { font-family: 'manrope-md'; src: local('Arial'); font-weight: 500; font-style: normal; }
+@font-face { font-family: 'manrope-sb'; src: local('Arial'); font-weight: 600; font-style: normal; }
+@font-face { font-family: 'manrope-bd'; src: local('Arial'); font-weight: bold; font-style: normal; }
 
 /*
 ** Custom Reset
@@ -425,7 +394,7 @@ textarea[disabled],
 }
 
 .hcol-usr {
-    background-image: url('../images/angle-down.svg');
+    background-image: url('../assets/angle-down.svg');
     background-position: center right 4px;
     background-repeat: no-repeat;
 }

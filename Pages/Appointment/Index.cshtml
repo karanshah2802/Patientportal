@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model Patientportal.Pages.Appointment.IndexModel
 @{
     List<string> FormofAppointment = new List<string> { "Dr. Sejal In-person Consultation", "Dr. Sejal Online Consultation", "Appointment Request for Procedures" };
@@ -553,8 +553,8 @@ maxDateTime.setFullYear(maxDateTime.getFullYear() + 10); // Max 10 years allowed
                       showError("AppointmentDateSpan", "Invalid Appointment Date Time.");
                         isValid = false;
                     } 
-                else if (enteredDateTime.getDay() === 0 || enteredDateTime.getDay() === 6) {
-                    showError("AppointmentDateSpan", "Appointments cannot be scheduled on weekends.");
+                else if (enteredDateTime.getDay() === 0) {
+                    showError("AppointmentDateSpan", "Appointments cannot be scheduled on Sunday.");
                     isValid = false;
                 } else if (enteredHour < startHour || (enteredHour === endHour && enteredMinutes > 0) || enteredHour > endHour) {
                     showError("AppointmentDateSpan", "Appointment time should be between 10 AM and 7 PM.");

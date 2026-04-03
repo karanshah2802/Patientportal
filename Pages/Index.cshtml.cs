@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Patientportal.AllApicall;
@@ -23,6 +23,7 @@ namespace Patientportal.Pages
         private readonly HttpClient _httpClient;
         private readonly ApiService _apiService;
         private readonly IConfiguration _configuration;
+        private readonly OpsTokenService _opsTokenService;
         [FromQuery(Name = "id")]
         public long? Id { get; set; }
         public ProfileListItem PatientData { get; set; }
@@ -31,12 +32,13 @@ namespace Patientportal.Pages
        
         public List<string> ChangeRequests { get; set; } = new List<string>();
         public List<AppointmentListItem> Doctorblocktime { get; set; } = new List<AppointmentListItem>();
-        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration)
+        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration, OpsTokenService opsTokenService)
         {
             _logger = logger;
             _httpClient = httpClientFactory;
             _apiService = apiService;
             _configuration = configuration;
+            _opsTokenService = opsTokenService;
         }
         public async Task<JsonResult> OnPostAppointmentView([FromBody] DataManagerRequest dm)
          {
@@ -50,7 +52,7 @@ namespace Patientportal.Pages
                 return new JsonResult(new { result = new List<object>(), count = 0 });
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/getPatientByAppointment?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/getPatientByAppointmentRequest?id={Id}";
@@ -138,7 +140,7 @@ namespace Patientportal.Pages
                 Id = Convert.ToInt64(queryId);
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             string apiUrl = $"{baseUrl}/api/v1/Appointment/getPatientByAppointment?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/getPatientByAppointmentRequest?id={Id}";
                var appointments =  await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl, token);
@@ -201,7 +203,7 @@ namespace Patientportal.Pages
                 return RedirectToPage("/Account/Index"); // Ya phir Redirect("/Login");
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/Profile/getProfile?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/Profile/getDetailsChangesbyId?id={Id}";
@@ -254,7 +256,7 @@ namespace Patientportal.Pages
                 var json = await reader.ReadToEndAsync();
                 ProfileListItem viewModel = JSON.Deserialize<ProfileListItem>(json);
                 string baseUrl = _configuration["ApiSettings:BaseUrl"];
-                string token = _configuration["ApiSettings:AuthToken"];
+                string token = await _opsTokenService.GetTokenAsync();
 
                 string apiUrl = $"{baseUrl}/api/Profile/Addpatientportalchanges";
                
@@ -282,7 +284,7 @@ namespace Patientportal.Pages
             var json = await reader.ReadToEndAsync();
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/viewAppointmentButton";
             
@@ -306,7 +308,7 @@ namespace Patientportal.Pages
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
 
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/AddAppointmentbyportalAppointmentbyPatientId";
            
@@ -330,7 +332,7 @@ namespace Patientportal.Pages
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
 
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/UpsertAppointmentRequest";
             

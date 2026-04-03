@@ -1,4 +1,4 @@
-﻿using Innovura.CSharp.Core;
+using Innovura.CSharp.Core;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
@@ -23,15 +23,17 @@ namespace Patientportal.Pages.Account
         private readonly HttpClient _httpClient;
         private readonly ApiService _apiService;
         private readonly OTPService _otpService;
+        private readonly OpsTokenService _opsTokenService;
         [BindProperty]
         public InputModel Input { get; set; }
-        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, IConfiguration configuration, ApiService apiService, OTPService oTPService)
+        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, IConfiguration configuration, ApiService apiService, OTPService oTPService, OpsTokenService opsTokenService)
         {
             _logger = logger;
             _httpClient = httpClientFactory;
             _apiService = apiService;
             _otpService = oTPService;
             _configuration = configuration;
+            _opsTokenService = opsTokenService;
         }
         public IActionResult OnGet()
         {
@@ -44,18 +46,18 @@ namespace Patientportal.Pages.Account
 
         public async Task<JsonResult> OnPostSendOTPAsync([FromBody] InputModel request)
         {
-            string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
-            string token2 = _configuration["ApiSettings:AuthToken"];
-            string apiUrl2 = $"{baseUrl}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
-            var PatientDetails = await _apiService.GetAsync<ProfileListItem>(apiUrl2, token);
             if (string.IsNullOrEmpty(request.Mobile) || request.Mobile.Length < 10)
             {
                 return new JsonResult(new { success = false, message = "Invalid phone number" });
             }
+
+            string baseUrl = _configuration["ApiSettings:BaseUrl"];
+            string token = await _opsTokenService.GetTokenAsync();
+            string apiUrl2 = $"{baseUrl}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
+            var PatientDetails = await _apiService.GetAsync<ProfileListItem>(apiUrl2, token);
             if (PatientDetails == null)
             {
-                return new JsonResult(new { success = false, message = "Mobile number not registered." });
+                return new JsonResult(new { success = false, message = "PatientDetails API failed or mobile number not registered." });
             }
             if (!_otpService.CanSendOTP(request.Mobile))
             {
@@ -92,7 +94,7 @@ namespace Patientportal.Pages.Account
                 return new JsonResult(new { success = false, message = "Invalid OTP number" });
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             string apiUrl2 = $"{baseUrl}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
             var PatientDetails = await _apiService.GetAsync<ProfileListItem>(apiUrl2, token);
             var patient = PatientDetails; 

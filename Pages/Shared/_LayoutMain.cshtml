@@ -1,10 +1,10 @@
-﻿@{
+@{
     Layout = "_Layout";
 }
 @section style {
 
-    <link rel="stylesheet" href="~/css/app/master.css" />
-    <link rel="stylesheet" href="~/css/masterextended.css" />
+    <link rel="stylesheet" href="~/app/master.css" asp-append-version="true" />
+    <link rel="stylesheet" href="~/css/masterextended.css" asp-append-version="true" />
 
     @RenderSection("Styles", required: false)
 }

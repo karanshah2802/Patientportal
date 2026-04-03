@@ -7,9 +7,22 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
-builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("OpsInsecure")
+    .ConfigurePrimaryHttpMessageHandler(() =>
+    {
+        var handler = new HttpClientHandler();
+        if (builder.Environment.IsDevelopment())
+        {
+            // Dev-only SSL bypass for local testing against untrusted cert chain.
+            handler.ServerCertificateCustomValidationCallback =
+                HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+        }
+        return handler;
+    });
 builder.Services.AddHttpClient<ApiService>();
 builder.Services.AddSingleton<OTPService>();
+builder.Services.AddSingleton<OpsTokenService>();
+builder.Services.AddHostedService<OpsTokenRefreshHostedService>();
 
 builder.Services.Configure<CookiePolicyOptions>(options =>
 {

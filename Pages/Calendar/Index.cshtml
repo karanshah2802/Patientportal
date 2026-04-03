@@ -1,4 +1,4 @@
-﻿@page
+@page
 @model Patientportal.Pages.Calendar.IndexModel
 @* @{
     ViewData["Title"] = "Calendar";
@@ -21,17 +21,19 @@
                 String(d.getDate()).padStart(2, '0');
         });
 
-        var doctorLeaveDates = doctorLeaves
+        var doctorLeaveSlots = doctorLeaves
             .filter(x => x.doctorId === selectedDoctorId)
             .map(function (x) {
-                var d = new Date(x.startDateTime);
-                return d.getFullYear() + "-" +
-                    String(d.getMonth() + 1).padStart(2, '0') + "-" +
-                    String(d.getDate()).padStart(2, '0');
+                return {
+                    start: new Date(x.startDateTime),
+                    end: new Date(x.endDateTime || x.startDateTime)
+                };
             });
 
         console.log("Holiday Dates:", holidayDates);
-        console.log("Doctor Leave Dates:", doctorLeaveDates);
+        console.log("Doctor Leave Slots:", doctorLeaveSlots);
+        // Make leave slots globally available for click blocking
+        window.calendarDoctorLeaveSlots = doctorLeaveSlots;
 
         if (doctorBlockTimes.length === 0) {
             console.log("No blocked appointments found.");
@@ -57,21 +59,27 @@
             if (args.elementType === "workCells" || args.elementType === "monthCells") {
                 var cellDate = args.date.toISOString().split('T')[0]; // Get YYYY-MM-DD format
                 if (holidayDates.includes(cellDate)) {
-                    args.element.classList.add("e-disabled", "holiday-cell"); // Apply custom class
+                    args.element.classList.add("e-disabled", "holiday-cell"); // Holiday: full-day gray
                 }
-                // If doctor leave → block
-                if (doctorLeaveDates.includes(cellDate)) {
-                    args.element.classList.add("e-disabled", "doctor-leave-cell");
+
+                // Doctor 1 leave: gray only for slots between start & end
+                if (Array.isArray(window.calendarDoctorLeaveSlots)) {
+                    var inLeave = window.calendarDoctorLeaveSlots.some(function (slot) {
+                        return args.date >= slot.start && args.date < slot.end;
+                    });
+                    if (inLeave) {
+                        args.element.classList.add("e-disabled", "doctor-leave-cell");
+                    }
                 }
             }
         };
-        // ADD → block full day if doctor is on leave
-        doctorLeaveDates.forEach(function (date) {
+        // Block only leave time range (Doctor 1)
+        doctorLeaveSlots.forEach(function (slot) {
             blockAppointments.push({
-                Id: "LV-" + date,
+                Id: "LV-" + slot.start.toISOString(),
                 Subject: "Doctor Leave",
-                StartTime: new Date(date + "T00:00:00"),
-                EndTime: new Date(date + "T23:59:00"),
+                StartTime: slot.start,
+                EndTime: slot.end,
                 IsReadonly: true,
                 CategoryColor: "#ff0000"  // Red color for leave block
             });
@@ -92,7 +100,7 @@
                       selectedDate="DateTime.Today"
                       startHour="10:00" endHour="19:15"
                       allowDragAndDrop="false" allowResizing="false"
-                      workDays="new int[] {1, 2, 3, 4, 5}"
+                      workDays="new int[] {1, 2, 3, 4, 5, 6}"
                       cellClick="onCellClick">
             <e-schedule-views>
                 <e-schedule-view option="Day"></e-schedule-view>
@@ -139,12 +147,23 @@
             return; // Stop execution (No redirect)
         }
         var clickedDate = new Date(args.startTime);
-        var day = clickedDate.getDay(); // 0 = Sunday, 6 = Saturday
+        var day = clickedDate.getDay(); // 0 = Sunday
 
-        // Agar clicked date Saturday ya Sunday hai toh click disable kar do
-        if (day === 0 || day === 6) {
-            args.cancel = true; // Click event ko cancel karo
+        // Sunday kabhi clickable nahi
+        if (day === 0) {
+            args.cancel = true;
             return;
+        }
+
+        // If clicked time falls inside any Doctor 1 leave slot, block it
+        if (Array.isArray(window.calendarDoctorLeaveSlots)) {
+            var inLeave = window.calendarDoctorLeaveSlots.some(function (slot) {
+                return clickedDateTime >= slot.start && clickedDateTime < slot.end;
+            });
+            if (inLeave) {
+                args.cancel = true;
+                return;
+            }
         }
 
         let startTime = args.startTime;

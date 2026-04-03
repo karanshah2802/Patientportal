@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Http.Extensions;
+using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Patientportal.AllApicall;
@@ -24,6 +24,7 @@ namespace Patientportal.Pages.Patient
         private readonly HttpClient _httpClient;
         private readonly ApiService _apiService;
         private readonly IConfiguration _configuration;
+        private readonly OpsTokenService _opsTokenService;
         [FromQuery(Name = "id")]
         public long? Id { get; set; }
         public ProfileListItem PatientData { get; set; }
@@ -37,12 +38,13 @@ namespace Patientportal.Pages.Patient
         public List<AppointmentListItem> Doctorblocktime { get; set; } = new List<AppointmentListItem>();
         public List<Holidays> Holidays { get; set; } = new List<Holidays>();
         public List<Leave> Leaves { get; set; } = new List<Leave>();
-        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration)
+        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration, OpsTokenService opsTokenService)
         {
             _logger = logger;
             _httpClient = httpClientFactory;
             _apiService = apiService;
             _configuration = configuration;
+            _opsTokenService = opsTokenService;
         }
         public async Task<JsonResult> OnPostAppointmentView([FromBody] DataManagerRequest dm)
         {
@@ -56,7 +58,7 @@ namespace Patientportal.Pages.Patient
                 return new JsonResult(new { result = new List<object>(), count = 0 });
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             string apiUrl = $"{baseUrl}/api/v1/Appointment/getPatientByAppointment?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/getPatientByAppointmentRequest?id={Id}";
               var appointments = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl, token);
@@ -168,7 +170,7 @@ namespace Patientportal.Pages.Patient
                 Id = Convert.ToInt64(queryId);
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/getPatientByAppointment?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/getPatientByAppointmentRequest?id={Id}";
@@ -248,7 +250,7 @@ namespace Patientportal.Pages.Patient
         public async Task<IActionResult> OnGetStatesAsync(int countryId)
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             string apiUrl4 = $"{baseUrl}/api/v1/CountryStateCity/GetStatesByCountry?countryId={countryId}";
            
             var states = await _apiService.GetAsync<List<State>>(apiUrl4, token) ?? new List<State>();
@@ -257,7 +259,7 @@ namespace Patientportal.Pages.Patient
         public async Task<IActionResult> OnGetCitiesAsync(int stateId)
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             string apiUrl = $"{baseUrl}/api/v1/CountryStateCity/GetCitiesByState?stateId={stateId}";
             
 
@@ -267,7 +269,7 @@ namespace Patientportal.Pages.Patient
         public async Task<IActionResult> OnGetPincodeforleadDataSourceAsync()
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             string apiUrl = $"{baseUrl}/api/v1/Pincode/getpincode";
 
             var pincodes = await _apiService.GetAsync<List<Pincode>>(apiUrl, token) ?? new List<Pincode>();
@@ -286,7 +288,7 @@ namespace Patientportal.Pages.Patient
                 return RedirectToPage("/Account/Index"); // Ya phir Redirect("/Login");
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/Profile/getProfileforpatientportal?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/Profile/getDetailsChangesbyId?id={Id}";
@@ -349,7 +351,7 @@ namespace Patientportal.Pages.Patient
             {
 
                 string baseUrl = _configuration["ApiSettings:BaseUrl"];
-                string token = _configuration["ApiSettings:AuthToken"];
+                string token = await _opsTokenService.GetTokenAsync();
                 using var reader = new StreamReader(HttpContext.Request.Body);
                 var json = await reader.ReadToEndAsync();
                 ProfileListItem viewModel = JSON.Deserialize<ProfileListItem>(json);
@@ -382,7 +384,7 @@ namespace Patientportal.Pages.Patient
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
 
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             string apiUrl = $"{baseUrl}/api/v1/Appointment/viewAppointmentButtonPatientPortal";
           
             var apiHelper = new ApiService(_httpClient);
@@ -405,7 +407,7 @@ namespace Patientportal.Pages.Patient
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
 
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/AddAppointmentbyportalAppointmentbyPatientId";
             
@@ -428,7 +430,7 @@ namespace Patientportal.Pages.Patient
             var json = await reader.ReadToEndAsync();
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/UpsertAppointmentRequest";
             string apiUrl5 = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
@@ -441,10 +443,13 @@ namespace Patientportal.Pages.Patient
                                               h.StartDate.Value.ToString("dd/MM/yyyy") == appointmentDate);
             int doctorId = 1; // <-- Default doctor
 
+            var appointmentStart = viewModel.AppointmentStartTime.Value;
             var isleave = Leaves.Any(h =>
+                h.DoctorId == doctorId &&
                 h.StartDateTime.HasValue &&
-                h.DoctorId == doctorId &&     // 🔥 Only check for doctor ID = 1
-                h.StartDateTime.Value.ToString("dd/MM/yyyy") == appointmentDate
+                h.EndDateTime.HasValue &&
+                appointmentStart >= h.StartDateTime.Value.LocalDateTime &&
+                appointmentStart < h.EndDateTime.Value.LocalDateTime
             );
 
             if (isHoliday)

@@ -1,4 +1,4 @@
-﻿using Innovura.CSharp.Core;
+using Innovura.CSharp.Core;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
@@ -23,18 +23,20 @@ namespace Patientportal.Pages.Appointment
         private readonly ApiService _apiService;
         private readonly IConfiguration _configuration;
         private readonly OTPService _otpService;
+        private readonly OpsTokenService _opsTokenService;
         public AppointmentListItem AppoinmentData { get; set; }
         public List<Holidays> Holidays { get; set; } = new List<Holidays>();
         [FromQuery(Name = "selectedDateTime")]
         public DateTimeOffset SelectedDateTime { get; set; }
         public string? EjsDateTimePattern = "dd/MM/yyyy hh:mm:ss a";
-        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration, OTPService otpService)
+        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration, OTPService otpService, OpsTokenService opsTokenService)
         {
             _logger = logger;
             _httpClient = httpClientFactory;
             _apiService = apiService;
             _configuration = configuration;
             _otpService = otpService;
+            _opsTokenService = opsTokenService;
         }
         public void OnGet()
         {
@@ -42,8 +44,7 @@ namespace Patientportal.Pages.Appointment
         public async Task<JsonResult> OnPostSendOTPAsync([FromBody] InputModel request)
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
-            string token2 = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             //string apiUrl2 = $"{baseUrl}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
             //var PatientDetails = await _apiService.GetAsync<ProfileListItem>(apiUrl2, token);
             //if (string.IsNullOrEmpty(request.Mobile) || request.Mobile.Length < 10)
@@ -89,7 +90,7 @@ namespace Patientportal.Pages.Appointment
                 return new JsonResult(new { success = false, message = "Invalid OTP number" });
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Account/Patientportalverify-otp";
             var payload = new { mobile = request.Mobile, otp = request.OTP };
@@ -127,7 +128,7 @@ namespace Patientportal.Pages.Appointment
         public async Task<IActionResult> OnPostPirescheduleAsync()
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
             using var reader = new StreamReader(HttpContext.Request.Body);
             var json = await reader.ReadToEndAsync();
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);

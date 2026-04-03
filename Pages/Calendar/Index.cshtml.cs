@@ -13,22 +13,24 @@ namespace Patientportal.Pages.Calendar
         private readonly HttpClient _httpClient;
         private readonly ApiService _apiService;
         private readonly IConfiguration _configuration;
+        private readonly OpsTokenService _opsTokenService;
         public List<AppointmentListItem> Doctorblocktime { get; set; } = new List<AppointmentListItem>();
         public List<Holidays> Holidays { get; set; } = new List<Holidays>();
         public List<Leave> Leaves { get; set; } = new List<Leave>();
 
         public string? EjsDateTimePattern = "dd/MM/yyyy hh:mm:ss a";
-        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration)
+        public IndexModel(ILogger<IndexModel> logger, HttpClient httpClientFactory, ApiService apiService, IConfiguration configuration, OpsTokenService opsTokenService)
         {
             _logger = logger;
             _httpClient = httpClientFactory;
             _apiService = apiService;
             _configuration = configuration;
+            _opsTokenService = opsTokenService;
         }
         public async Task OnGet()
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
@@ -59,7 +61,7 @@ namespace Patientportal.Pages.Calendar
         public async Task OnGetCalendarAsync()
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = _configuration["ApiSettings:AuthToken"];
+            string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
             
