@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.RazorPages;
 using Patientportal.AllApicall;
 using Patientportal.Model;
 using Patientportal.Pages.Account;
-using Syncfusion.EJ2.Base;
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Security.Claims;
 using System.Text;
@@ -97,7 +97,6 @@ namespace Patientportal.Pages.Appointment
             var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
 
             var response = await _apiService.PostAsync<InputModel, ApiResponse>(apiUrl, request, token);
-            var Id = 1; 
             if (response.IsSucceeded)
             {
                 _otpService.ClearOTPAttempts(request.Mobile); 
@@ -112,12 +111,31 @@ namespace Patientportal.Pages.Appointment
                 var principal = new ClaimsPrincipal(identity);
 
                 await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, principal);
-                //string encryptedId = EncryptionHelper.EncryptId(Id ?? 0);
+
+                string apiUrl2 = $"{baseUrl}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
+                var patient = await _apiService.GetAsync<ProfileListItem>(apiUrl2, token);
+                var hasExistingProfile = patient != null && patient.Id > 0;
+                object? profileDto = null;
+                if (hasExistingProfile)
+                {
+                    profileDto = new
+                    {
+                        id = patient!.Id,
+                        name = patient.Name ?? string.Empty,
+                        email = patient.Email ?? string.Empty,
+                        gender = patient.Gender ?? string.Empty,
+                        dob = patient.Dob,
+                        age = patient.Age,
+                        mobile = !string.IsNullOrWhiteSpace(patient.Mobile) ? patient.Mobile : request.Mobile
+                    };
+                }
 
                 return new JsonResult(new
                 {
                     success = true,
                     message = "OTP Verified Successfully",
+                    hasExistingProfile,
+                    profile = profileDto
                 });
             }
             else
@@ -133,6 +151,47 @@ namespace Patientportal.Pages.Appointment
             var json = await reader.ReadToEndAsync();
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
 
+            string? dobRaw = null;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("Dob", out var dobEl))
+                    dobRaw = dobEl.GetString();
+                else if (root.TryGetProperty("dob", out var dobEl2))
+                    dobRaw = dobEl2.GetString();
+            }
+            catch (JsonException)
+            {
+                // ignore; appointment flow continues without DOB patch
+            }
+
+            if (viewModel.PatientId.HasValue && viewModel.PatientId.Value > 0)
+            {
+                var profileUpdate = new ProfileListItem
+                {
+                    Id = viewModel.PatientId.Value,
+                    Name = viewModel.Name,
+                    Email = viewModel.Email,
+                    Mobile = viewModel.Mobile,
+                    Gender = viewModel.Gender,
+                    Age = viewModel.Age
+                };
+                var parsedDob = ParsePortalDob(dobRaw);
+                if (parsedDob.HasValue)
+                    profileUpdate.Dob = parsedDob;
+
+                string profileApiUrl = $"{baseUrl}/api/Profile/Addpatientportalchanges";
+                var profileResponse = await _apiService.PostAsync<ProfileListItem, ApiResponse>(profileApiUrl, profileUpdate, token);
+                if (profileResponse == null || !profileResponse.IsSuccess)
+                {
+                    var err = profileResponse?.Message
+                        ?? (profileResponse?.Errors != null && profileResponse.Errors.Length > 0
+                            ? string.Join(" ", profileResponse.Errors)
+                            : "Failed to update profile.");
+                    return new JsonResult(new { isSuccess = false, errorMessage = err });
+                }
+            }
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/AddAppointmentbyPatientPortal";
              string apiUrl5 = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
@@ -146,7 +205,6 @@ namespace Patientportal.Pages.Appointment
             {
                 return new JsonResult(new { isSuccess = false, errorMessage = "Appointments cannot be scheduled on holidays." });
             }
-            var apiHelper = new ApiService(_httpClient);
             var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
             if (response != null && response.IsSuccess)
@@ -158,6 +216,19 @@ namespace Patientportal.Pages.Appointment
             {
                 return BadRequest("Failed to save patient details.");
             }
+        }
+
+        private static DateTimeOffset? ParsePortalDob(string? dobRaw)
+        {
+            if (string.IsNullOrWhiteSpace(dobRaw))
+                return null;
+            var trimmed = dobRaw.Trim();
+            var formats = new[] { "M/d/yyyy", "MM/dd/yyyy", "d/M/yyyy", "dd/MM/yyyy", "yyyy-MM-dd" };
+            if (DateTime.TryParseExact(trimmed, formats, CultureInfo.InvariantCulture, DateTimeStyles.None, out var dt))
+                return new DateTimeOffset(dt);
+            if (DateTime.TryParse(trimmed, CultureInfo.InvariantCulture, DateTimeStyles.None, out dt))
+                return new DateTimeOffset(dt);
+            return null;
         }
     }
 }

@@ -18,6 +18,11 @@
         opacity: 0.5; /* Make it look disabled */
     }
 
+    input.form-control[readonly], textarea[readonly] {
+        background-color: #f8f9fa;
+        cursor: not-allowed;
+    }
+
 </style>
 <!DOCTYPE html>
 <html lang="en">
@@ -167,6 +172,60 @@
 </style>
 
 <script>
+    window.__appointmentPatientId = null;
+
+    function applyProfileFromOtp(profile) {
+        if (!profile || !profile.id) return;
+        window.__appointmentPatientId = profile.id;
+        $('#PatientId').val(profile.id);
+
+        var name = profile.name && String(profile.name).trim();
+        if (name) {
+            $('#pi-name').val(name).prop('readonly', true).addClass('bg-light');
+        }
+        var email = profile.email && String(profile.email).trim();
+        if (email) {
+            $('#pi-email').val(email).prop('readonly', true).addClass('bg-light');
+        }
+        if (profile.mobile) {
+            var digits = String(profile.mobile).replace(/\D/g, '');
+            if (digits.length >= 10) {
+                $('#pi-phoneno').val(digits.slice(-10));
+            }
+        }
+        var gender = profile.gender && String(profile.gender).trim();
+        if (gender) {
+            var g = gender.toLowerCase();
+            if (g === 'male') {
+                $('#gender-male').prop('checked', true);
+            } else if (g === 'female') {
+                $('#gender-female').prop('checked', true);
+            } else {
+                $('#gender-other').prop('checked', true);
+            }
+            $('input[name="gender"]').prop('disabled', true);
+        }
+
+        var dobInst = document.getElementById('pi-dob') && document.getElementById('pi-dob').ej2_instances && document.getElementById('pi-dob').ej2_instances[0];
+        var hasDob = profile.dob != null && profile.dob !== '';
+        if (hasDob && dobInst) {
+            var d = new Date(profile.dob);
+            if (!isNaN(d.getTime())) {
+                dobInst.value = d;
+                dobInst.readonly = true;
+                var today = new Date();
+                var age = today.getFullYear() - d.getFullYear();
+                var m = today.getMonth() - d.getMonth();
+                if (m < 0 || (m === 0 && today.getDate() < d.getDate())) {
+                    age--;
+                }
+                $('#pi-age').val(age).prop('readonly', true).addClass('bg-light');
+            }
+        } else if (profile.age != null && profile.age !== '' && !isNaN(parseInt(profile.age, 10))) {
+            $('#pi-age').val(parseInt(profile.age, 10)).prop('readonly', true).addClass('bg-light');
+        }
+    }
+
     $(document).ready(function () {
         const $phoneInput = $('#pi-phoneno');
         const $verifyBtn = $('#verify-btn');
@@ -234,6 +293,13 @@
                         $otpModal.hide();
                         $saveBtn.removeClass('a-disabled'); // enable Save
                         $verifyBtn.addClass('a-disabled'); // enable Save
+                        $phoneInput.prop('readonly', true).addClass('bg-light');
+                        if (res.hasExistingProfile && res.profile) {
+                            applyProfileFromOtp(res.profile);
+                        } else {
+                            window.__appointmentPatientId = null;
+                            $('#PatientId').val('');
+                        }
                         toastr.success("OTP Verifyed successfully!"); // Show success message
                     } else {
                         $('#otp-msg').text(res.message);
@@ -644,8 +710,9 @@ maxDateTime.setFullYear(maxDateTime.getFullYear() + 10); // Max 10 years allowed
                 Comment: $("#pi-notes").val(),
                 AppointmentStartTime: formattedAppointmentStartTime,
                 Age: $("#pi-age").val(),
-                Dob: formattedAppointmentStartTime, // Use formatted date
-                Gender: selectedGender
+                Dob: formattedDob,
+                Gender: selectedGender,
+                PatientId: window.__appointmentPatientId
             };
 
             // Function to convert date to MM/DD/YYYY
