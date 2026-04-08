@@ -46,15 +46,31 @@
     }
 
     .ius-block-head {
-        flex-wrap: nowrap;
-        margin-bottom: 20px;
+        flex-wrap: wrap;
+        align-items: flex-start;
+        gap: 8px 12px;
+        margin-bottom: 16px;
     }
 
         .ius-block-head h2 {
-            flex: 1 0 auto;
-            width: auto;
-            margin-bottom: 10px;
+            flex: 1 0 100%;
+            width: 100%;
+            margin-bottom: 0;
         }
+
+    .ius-grid-filters {
+        flex: 1 0 100%;
+        width: 100%;
+    }
+
+    .ius-appointment-card-head {
+        justify-content: flex-start;
+        align-items: flex-start;
+    }
+
+    .ius-appointment-card-head .ius-grid-filters {
+        text-align: left;
+    }
 
     .page-login {
         position: relative;
@@ -93,7 +109,7 @@
 @media screen and (max-width: 575px) {
     h1, .h1 {
         font-size: 20px;
-        line-height: 30em;
+        line-height: 30px;
     }
 
     h2, .h2 {

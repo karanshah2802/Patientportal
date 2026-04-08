@@ -176,8 +176,9 @@
             ("0" + startTime.getMinutes()).slice(-2) + ":" +
             ("0" + startTime.getSeconds()).slice(-2);
 
-        // Redirect to Appointment page with local time
-        window.location.href = `/Appointment?SelectedDateTime=${formattedTime}`;
+        // Redirect to Appointment page with local time (preserve patient-portal booking flow)
+        var fromPatientSuffix = @(Model.ReturnToPatientPortalBooking ? "'&fromPatient=1'" : "''");
+        window.location.href = `/Appointment?SelectedDateTime=${formattedTime}` + fromPatientSuffix;
     }
 
 

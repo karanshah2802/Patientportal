@@ -85,3 +85,41 @@ nav ul {
 .e-multi-column {
     text-transform: uppercase;
 }
+
+/* Dashboard content: less gap under header (Patient Portal, Appointments) */
+.dashboard__body main {
+    padding: 16px 20px 28px;
+}
+
+.dashboard__body main .page {
+    padding-top: 12px;
+    padding-bottom: 32px;
+}
+
+@media screen and (max-width: 767.98px) {
+    .dashboard__body main {
+        padding: 12px 12px 20px;
+    }
+
+    .dashboard__body main .page {
+        padding-top: 8px;
+        padding-bottom: 24px;
+    }
+
+    .dashboard__body main .ius-card {
+        padding: 16px;
+    }
+
+    .dashboard__body main .container.container-x {
+        max-width: 100%;
+    }
+
+    .dashboard__body main .ius-table.table-responsive {
+        margin-left: -4px;
+        margin-right: -4px;
+        padding-left: 4px;
+        padding-right: 4px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+}

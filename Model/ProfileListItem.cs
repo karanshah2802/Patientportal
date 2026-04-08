@@ -94,6 +94,8 @@ namespace Patientportal.Model
         public string? Mobiles { get; set; }
         public long? MergeFrom { get; set; }
         public bool Isdependent { get; set; }
+        public string? IndependentOrDependentLabel { get; set; }
+        public string? PatientRelationshipName { get; set; }
         public bool IsMainProfile { get; set; }
 
         public bool IsMergeProfile { get; set; }

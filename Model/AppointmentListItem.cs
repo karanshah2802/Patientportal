@@ -43,10 +43,16 @@ namespace Patientportal.Model
 
         public string? AppointmentForm { get; set; }
         public string? Comment { get; set; }
+        /// <summary>Optional UI field; merged into Comment for API if the backend has no separate property.</summary>
+        [NotMapped]
+        public string? Relation { get; set; }
         public string? SourceName { get; set; }
         public string? DoctorName { get; set; }
         public bool? IsPatientAppointment { get; set; }
 
+        /// <summary>Who the slot is for (self or dependent); set when binding the portal grid.</summary>
+        [NotMapped]
+        public string? BookedForPatientName { get; set; }
 
         //[NotMapped]
         public string? ConcernGroups { get; set; }

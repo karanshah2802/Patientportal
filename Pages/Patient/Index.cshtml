@@ -1,5 +1,7 @@
 @page
 @model Patientportal.Pages.Patient.IndexModel
+@using System.Globalization
+@using System.Text.Json
 @{
     ViewData["Title"] = "Patient Portal";
     Layout = "_LayoutMain";
@@ -18,6 +20,18 @@
     {
         pendingBalance = value;
     }
+
+    var portalDepsProfileIdStr = Model.LoggedInProfileId > 0
+        ? Model.LoggedInProfileId.ToString(CultureInfo.InvariantCulture)
+        : "0";
+    var portalDependentsDmUrl = Model.ShowPortalDependentSection
+        ? $"/Appointment/Index?handler=PortalDependents&profileId={portalDepsProfileIdStr}"
+        : "";
+    var portalDependentsDmUrlJson = JsonSerializer.Serialize(portalDependentsDmUrl);
+    var portalDependentsCardUrl = Model.ShowPortalDependentSection
+        ? $"/Appointment/Index?handler=PortalDependentsCard&profileId={portalDepsProfileIdStr}"
+        : "";
+    var portalDependentsCardUrlJson = JsonSerializer.Serialize(portalDependentsCardUrl);
 }
 @Html.AntiForgeryToken()
 <!DOCTYPE html>
@@ -25,14 +39,15 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Portal</title>
+    <title>Patient Portal · Inurskn - Patient Portal</title>
 
     <link rel="stylesheet" href="~/css/bootstrap.min.css">
     <link rel="stylesheet" href="~/css/custom.css">
     <link rel="stylesheet" href="~/css/responsive.css">
+    <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css" />
 
-    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="icon" href="~/favicon.png" type="image/png" asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/favicon.png" asp-append-version="true" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
 
 </head>
@@ -41,39 +56,19 @@
         <div class="container container-x">
             <h1 class="page-title text-28">Patient Portal</h1>
             <div class="ius-block ius-card ius-appdata">
-                <div class="ius-block-head">
-                    <h2>Appointment Information</h2>
-
+                <div class="ius-block-head ius-appointment-card-head">
                     <div class="ius-grid-filters">
-                        <div class="dropdown">
-                            <a class="" href="#" data-bs-toggle="dropdown" title="Book Appointment">
-                                Book Appointment
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li>
-                                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#schedulerModal2">
-                                        Dr. Sejal In-person Consultation
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#oConsultationModal">
-                                        Dr. Sejal Online Consultation
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#cosmeticProcModel">
-                                        Appointment Request for Procedures
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
+                        <a class="ius-btn-book-appointment" href="@Url.Page("/Appointment/Index", null, new { fromPatient = "1" })" title="Book appointment">
+                            <span>Book appointment</span>
+                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
                     </div>
 
                 </div>
 
                 <!-- Only for desktop : Syncfusion -->
                 <div class="ius-table d-none d-lg-block table-responsive">
-                    <ejs-grid id="GridAppointments"
+                    <ejs-grid id="GridPatientAppointments"
                               allowResizing="true"
                               allowExcelExport="true"
                               allowFiltering="false"
@@ -82,7 +77,7 @@
                               allowSelection="true"
                               allowReordering="true"
                               enableHeaderFocus="true"
-                              enablePersistence="true"
+                              enablePersistence="false"
                               enableHover="true"
                               autoFit="true"
                               height="200"
@@ -94,7 +89,7 @@
 
                         <e-data-manager url="/Patient/Index?handler=AppointmentView&Id=@Model.Id" adaptor="UrlAdaptor" crossDomain="true"></e-data-manager>
 
-                        <e-grid-searchsettings fields="@(new string[] {"AppoinmentType","DoctorName","AppointmentStartTime","StatusName"})"></e-grid-searchsettings>
+                        <e-grid-searchsettings fields="@(new string[] {"bookedForPatientName","appoinmentType","doctorName","appointmentStartTime","statusName"})"></e-grid-searchsettings>
 
                         <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
                         <e-grid-loadingIndicator indicatorType="Shimmer"></e-grid-loadingIndicator>
@@ -104,11 +99,12 @@
                         <e-grid-columns>
 
                             <e-grid-column headerText="Actions" width="120" textAlign="Center" template="#actionTemplate"></e-grid-column>
-                            <e-grid-column field="Id" headerText="Id" width="200" visible="false"></e-grid-column>
-                            <e-grid-column field="AppoinmentType" headerText="Type of Appointment" width="200"></e-grid-column>
-                            <e-grid-column field="DoctorName" headerText="Appointment With" width="200"></e-grid-column>
-                            <e-grid-column field="AppointmentStartTime" headerText="Appointment Date Time" format="@Model.EjsDateTimePattern" type="dateTime" width="200"></e-grid-column>
-                            <e-grid-column field="StatusName" headerText="Status" width="150"></e-grid-column>
+                            <e-grid-column field="id" headerText="Id" width="200" visible="false" isPrimaryKey="true"></e-grid-column>
+                            <e-grid-column field="appoinmentType" headerText="Type of Appointment" width="200"></e-grid-column>
+                            <e-grid-column field="bookedForPatientName" headerText="Appointment for" width="180"></e-grid-column>
+                            <e-grid-column field="doctorName" headerText="Appointment With" width="200"></e-grid-column>
+                            <e-grid-column field="appointmentStartTime" headerText="Appointment Date Time" format="@Model.EjsDateTimePattern" type="dateTime" width="200"></e-grid-column>
+                            <e-grid-column field="statusName" headerText="Status" width="150"></e-grid-column>
                         </e-grid-columns>
                     </ejs-grid>
                     <script id="actionTemplate" type="text/x-template">
@@ -143,22 +139,23 @@
                 </div>
 
             }
-            <div class="ius-block ius-card ius-notes">
-                <h2 class="mb-2 pb-1 text--red">Note</h2>
-                <ol>
-                    @* <li>Appointment  will be booked for consultation with Dr. Sejal Saheta.</li> *@
-                    <li>In case a calendar slot is not available as per your convinence please call <a href="tel:+91-9819286930" title="91-9819286930">+91 9819286930</a> / <a href="tel:+91-9326028277" title="91-9326028277">+91 9326028277</a></li>
-                </ol>
-            </div>
-            <div class="ius-block ius-card">
-                <div class="ius-block ius-card d-flex">
-                    <h2>Patient Information</h2>
-                    <!-- Edit icon ke liye -->
-                    <a href="#" id="edit-icon" title="Edit Patient Info" style="font-size: 18px; margin-left: 10px;">
-                        <i class="fa fa-pencil"></i> <!-- FontAwesome pencil icon -->
+            <div class="ius-block ius-card patient-info-card">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 patient-info-card-head">
+                    <button class="btn btn-link text-dark text-decoration-none d-flex align-items-center p-0 flex-grow-1 text-start patient-info-collapse-toggle collapsed"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#patientInfoCollapse"
+                            aria-expanded="false"
+                            aria-controls="patientInfoCollapse">
+                        <i class="fas fa-chevron-down patient-info-chevron me-2" aria-hidden="true"></i>
+                        <span class="h2 mb-0">Patient Information</span>
+                    </button>
+                    <a href="#" id="edit-icon" title="Edit Patient Info" class="text-dark flex-shrink-0" style="font-size: 18px;">
+                        <i class="fa fa-pencil" aria-hidden="true"></i>
                     </a>
                 </div>
 
+                <div class="collapse" id="patientInfoCollapse">
                 <form class="ius-form" action="#" method="POST">
                     <input type="hidden" id="PatientId" asp-for="PatientData.Id" name="medicalPatientSignature" class="custom-field-height" />
                     <div class="row">
@@ -651,7 +648,142 @@
                         </div>
                     </div>
                 </form>
+                </div>
             </div>
+
+            @if (Model.ShowPortalDependentSection)
+            {
+                <div class="ius-block ius-card patient-info-card">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 patient-info-card-head">
+                        <button class="btn btn-link text-dark text-decoration-none d-flex align-items-center p-0 flex-grow-1 text-start patient-info-collapse-toggle collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#patientDependentsCollapse"
+                                aria-expanded="false"
+                                aria-controls="patientDependentsCollapse">
+                            <i class="fas fa-chevron-down patient-info-chevron me-2" aria-hidden="true"></i>
+                            <span class="h2 mb-0">Dependents</span>
+                        </button>
+                    </div>
+                    <div class="collapse" id="patientDependentsCollapse">
+                        <div class="portal-dependent-toolbar d-flex flex-wrap align-items-center gap-2 px-1 pb-2 pt-1">
+                            <button type="button" class="bttn bttn-primary mb-0" id="open-dependent-details-btn" data-bs-toggle="modal" data-bs-target="#addDependentAppointmentModal">Add Dependent Patient</button>
+                        </div>
+                        @if (Model.LoggedInProfileId > 0)
+                        {
+                            <div class="ius-table d-none d-lg-block table-responsive border rounded p-2 bg-white mx-1 mb-2">
+                                <ejs-grid id="GridPortalDependents"
+                                          allowResizing="true"
+                                          allowPaging="true"
+                                          allowSorting="false"
+                                          allowFiltering="false"
+                                          allowSelection="true"
+                                          enableHeaderFocus="true"
+                                          enableHover="true"
+                                          autoFit="true"
+                                          height="280"
+                                          rowHeight="38"
+                                          recordDoubleClick="onPortalDependentRecordDoubleClick"
+                                          created="onPortalDependentsGridCreated"
+                                          dataBound="onPortalDependentsDataBound">
+                                    <e-data-manager url="@portalDependentsDmUrl" adaptor="UrlAdaptor" crossDomain="true"></e-data-manager>
+                                    <e-grid-loadingIndicator indicatorType="Shimmer"></e-grid-loadingIndicator>
+                                    <e-grid-pagesettings pageCount="10" pageSize="10" pageSizes="@(new string[] { "10", "15", "25", "50" })"></e-grid-pagesettings>
+                                    <e-grid-selectionsettings type="Single"></e-grid-selectionsettings>
+                                    <e-grid-columns>
+                                        <e-grid-column field="id" headerText="Profile ID" width="100" isPrimaryKey="true" visible="false"></e-grid-column>
+                                        <e-grid-column field="name" headerText="Name" width="180" minWidth="120"></e-grid-column>
+                                        <e-grid-column field="age" headerText="Age" width="80"></e-grid-column>
+                                        <e-grid-column field="gender" headerText="Gender" width="100"></e-grid-column>
+                                        <e-grid-column field="patientRelationshipName" headerText="Relation" width="160" minWidth="100"></e-grid-column>
+                                        <e-grid-column headerText="Actions" width="130" minWidth="120" textAlign="Center" template="#portalDependentEditBtnTemplatePatient"></e-grid-column>
+                                    </e-grid-columns>
+                                </ejs-grid>
+                                <script id="portalDependentEditBtnTemplatePatient" type="text/x-template">
+                                    <button type="button" class="bttn bttn-primary-outline btn-sm py-0 px-2 portal-dep-edit-btn" aria-label="Edit dependent">Edit</button>
+                                </script>
+                            </div>
+                            <div class="ius-grid d-lg-none text-14 border rounded p-2 bg-white mt-2 mx-1 mb-2" id="portal-dependents-container" aria-live="polite"></div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="ius-block ius-card ius-notes">
+                <h2 class="mb-2 pb-1 text--red">Note</h2>
+                <ol>
+                    @* <li>Appointment  will be booked for consultation with Dr. Sejal Saheta.</li> *@
+                    <li>In case a calendar slot is not available as per your convinence please call <a href="tel:+91-9819286930" title="91-9819286930">+91 9819286930</a> / <a href="tel:+91-9326028277" title="91-9326028277">+91 9326028277</a></li>
+                </ol>
+            </div>
+
+            @if (Model.ShowPortalDependentSection)
+            {
+                <div class="modal fade" id="addDependentAppointmentModal" tabindex="-1" aria-labelledby="addDependentAppointmentModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="addDependentAppointmentModalLabel">Add Dependent Patient</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" id="dep-modal-editing-profile-id" value="" autocomplete="off" />
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <label for="dep-modal-name" class="form-label">Name<span class="text-danger">*</span></label>
+                                        <input type="text" name="dependent_modal_name" maxlength="100" class="form-control dependent-modal-text" id="dep-modal-name" value="" autocomplete="name" />
+                                        <span id="dep-modal-namespan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="dep-modal-age" class="form-label">Age<span class="text-danger">*</span></label>
+                                        <input type="text" name="dependent_modal_age" class="form-control dependent-modal-text" id="dep-modal-age" oninput="validateAge(this)" value="" inputmode="numeric" maxlength="2" />
+                                        <span id="dep-modal-agespan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="dep-modal-gender">Gender<span class="text-danger">*</span></label>
+                                        <ejs-dropdownlist id="dep-modal-gender"
+                                                          cssClass="dependent-modal-ddl form-control"
+                                                          style="height: 45px;"
+                                                          placeholder="Select gender"
+                                                          dataSource="@Model.DependentGenderOptions"
+                                                          popupHeight="220px"
+                                                          showClearButton="false">
+                                        </ejs-dropdownlist>
+                                        <span id="dep-modal-genderspan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="dep-modal-relation">Relation<span class="text-danger">*</span></label>
+                                        <ejs-dropdownlist id="dep-modal-relation"
+                                                          cssClass="dependent-modal-ddl form-control"
+                                                          style="height: 45px;"
+                                                          TValue="long?"
+                                                          placeholder="Select relation"
+                                                          dataSource="@Model.PatientRelationshipOptions"
+                                                          popupHeight="280px"
+                                                          showClearButton="true"
+                                                          allowFiltering="true"
+                                                          filterBarPlaceholder="Search">
+                                            <e-dropdownlist-fields text="Name" value="Id"></e-dropdownlist-fields>
+                                        </ejs-dropdownlist>
+                                        <span id="dep-modal-relationspan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer flex-nowrap justify-content-end">
+                                <button type="button" class="bttn bttn-primary-outline" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="bttn bttn-primary" id="dependent-modal-done-btn" title="Save">Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    window.__portalDependentsDmUrl = @Html.Raw(portalDependentsDmUrlJson);
+                    window.__portalDependentsCardUrl = @Html.Raw(portalDependentsCardUrlJson);
+                    window.__portalParentProfileId = "@Model.LoggedInProfileId.ToString(CultureInfo.InvariantCulture)";
+                </script>
+            }
+
             <script>
                 document.addEventListener("DOMContentLoaded", function () {
                     const countryValuee = "@Model.PatientData.Country";
@@ -765,8 +897,8 @@
 
                             // Check if clicked inside the grid or a dynamically generated card
                             let row = rescheduleBtn.closest("tr");
-                            if (row && document.getElementById("GridAppointments")) {
-                                let grid = document.getElementById("GridAppointments").ej2_instances[0];
+                            if (row && document.getElementById("GridPatientAppointments")) {
+                                let grid = document.getElementById("GridPatientAppointments").ej2_instances[0];
                                 let rowData = grid.getRowInfo(row).rowData;
                                 appointmentId = rowData.id;
                             } else {
@@ -788,8 +920,8 @@
 
                             // Check if clicked inside the grid or a dynamically generated card
                             let row = cancelBtn.closest("tr");
-                            if (row && document.getElementById("GridAppointments")) {
-                                let grid = document.getElementById("GridAppointments").ej2_instances[0];
+                            if (row && document.getElementById("GridPatientAppointments")) {
+                                let grid = document.getElementById("GridPatientAppointments").ej2_instances[0];
                                 let rowData = grid.getRowInfo(row).rowData;
                                 appointmentId = rowData.id;
                             } else {
@@ -861,7 +993,8 @@
 
             <script>
                 function onQueryCellInfo(args) {
-                    if (args.column.field === "StatusName") {
+                    var statusField = args.column.field;
+                    if (statusField === "statusName" || statusField === "StatusName") {
                         if (args.data.statusName === "Booked") {
                             args.cell.innerHTML = `<span class="badge badge-success">Booked</span>`;
                         } else if (args.data.statusName === "Completed") {
@@ -889,100 +1022,12 @@
                 }
 
             </script>
-            <!-- Only for mobile : Syncfusion -->
-            <div class="ius-grid d-lg-none text-14" id="appointments-container">
-                <div class="ius-gridrow">
-                    <div class="ius-appbody">
-                        <div class="ius-appinfo">
-                            <h3>Dr. Sejal Saheta</h3>
-                            <div class="ius-apptyfo">
-                                <span class="appinfo-type">Consultation</span>
-                                <span class="appinfo-dot"></span>
-                                <span class="appinfo-form">Inclinic</span>
-                            </div>
-                        </div>
-                        <div class="ius-ctrls">
-                            <a href="#app-resched" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#app-resched">
-                                <img loading="lazy" src="~/assets/calendar.svg" width="18" height="20" alt="Calendar">
-                            </a>
-                            <a href="#app-cancel" title="Cancel" data-bs-toggle="modal" data-bs-target="#app-cancel">
-                                <img loading="lazy" src="~/assets/delete.svg" width="18" height="20" alt="Cancel">
-                            </a>
-                        </div>
-                    </div>
-                    <div class="ius-foo">
-                        <div class="ius-datetime">
-                            <div class="datetime-label text-sb">Date & Time</div>
-                            <div>1/3/2025 12:10:00</div>
-                        </div>
-
-                        <div class="ius-status">
-                            <div class="ius-badge">Reschedule</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ius-gridrow">
-                    <div class="ius-appbody">
-                        <div class="ius-appinfo">
-                            <h3>Dr. Sejal Saheta</h3>
-                            <div class="ius-apptyfo">
-                                <span class="appinfo-type">Consultation</span>
-                                <span class="appinfo-dot"></span>
-                                <span class="appinfo-form">Inclinic</span>
-                            </div>
-                        </div>
-                        <div class="ius-ctrls">
-                            <a href="#app-resched" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#app-resched">
-                                <img loading="lazy" src="~/assets/calendar.svg" width="18" height="20" alt="Calendar">
-                            </a>
-                            <a href="#app-cancel" title="Cancel" data-bs-toggle="modal" data-bs-target="#app-cancel">
-                                <img loading="lazy" src="~/assets/delete.svg" width="18" height="20" alt="Cancel">
-                            </a>
-                        </div>
-                    </div>
-                    <div class="ius-foo">
-                        <div class="ius-datetime">
-                            <div class="datetime-label text-sb">Date & Time</div>
-                            <div>1/3/2025 12:10:00</div>
-                        </div>
-
-                        <div class="ius-status">
-                            <div class="ius-badge badge-green">Booked</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ius-gridrow">
-                    <div class="ius-appbody">
-                        <div class="ius-appinfo">
-                            <h3>Dr. Sejal Saheta</h3>
-                            <div class="ius-apptyfo">
-                                <span class="appinfo-type">Consultation</span>
-                                <span class="appinfo-dot"></span>
-                                <span class="appinfo-form">Inclinic</span>
-                            </div>
-                        </div>
-                        <div class="ius-ctrls">
-                            <a href="#app-resched" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#app-resched">
-                                <img loading="lazy" src="~/assets/calendar.svg" width="18" height="20" alt="Calendar">
-                            </a>
-                            <a href="#app-cancel" title="Cancel" data-bs-toggle="modal" data-bs-target="#app-cancel">
-                                <img loading="lazy" src="~/assets/delete.svg" width="18" height="20" alt="Cancel">
-                            </a>
-                        </div>
-                    </div>
-                    <div class="ius-foo">
-                        <div class="ius-datetime">
-                            <div class="datetime-label text-sb">Date & Time</div>
-                            <div>1/3/2025 12:10:00</div>
-                        </div>
-
-                        <div class="ius-status">
-                            <div class="ius-badge badge-red">Cancelled</div>
-                        </div>
-                    </div>
-                </div>
+            <!-- Only for mobile: card list with server-side pagination (matches desktop grid page size) -->
+            <div class="ius-grid d-lg-none text-14" id="appointments-container"></div>
+            <div class="ius-appointments-pager d-none d-flex d-lg-none flex-wrap justify-content-between align-items-center gap-2 mt-3 px-1 py-2" id="appointments-pager">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="appt-pager-prev" aria-label="Previous page">Previous</button>
+                <span class="text-12 text-muted flex-grow-1 text-center" id="appt-pager-info"></span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="appt-pager-next" aria-label="Next page">Next</button>
             </div>
         </div>
         </div>
@@ -2590,11 +2635,11 @@
         });
 
     </script>
-    <script src="./js/jquery.min.js"></script>
-    <script src="./js/bootstrap.bundle.min.js"></script>
-    <script src="./js/custom.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-
+    @if (Model.ShowPortalDependentSection)
+    {
+        <script src="~/js/patient-portal-dependents.js" asp-append-version="true"></script>
+    }
 
 </body>
 </html>
@@ -2633,8 +2678,12 @@
         var editButton = document.getElementById("edit-btn");
 
         editIcon.addEventListener("click", function (e) {
-            e.preventDefault(); // page reload na ho
-            editButton.click(); // Edit button click simulate
+            e.preventDefault();
+            var collapseEl = document.getElementById("patientInfoCollapse");
+            if (collapseEl && !collapseEl.classList.contains("show")) {
+                bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false }).show();
+            }
+            editButton.click();
         });
     });
 </script>
@@ -3110,10 +3159,10 @@
             this.excelExport({ hierarchyExportMode: "All", fileName: "Holidays.xlsx" });
         }
         if (args.item.id === 'GridLeave_resetlayout') {
-            clearFilters('GridAppointments');
+            clearFilters('GridPatientAppointments');
         }
         if (args.item.id === 'GridLeave_clearfilters') {
-            var gridObj = document.getElementById('GridAppointments').ej2_instances[0];
+            var gridObj = document.getElementById('GridPatientAppointments').ej2_instances[0];
             gridObj.searchModule.search("");
             gridObj.clearFiltering();
         }
@@ -3121,36 +3170,91 @@
     }
 
     function gridActionComplete() {
-        updateGridUserPreference('GridAppointments');
+        updateGridUserPreference('GridPatientAppointments');
     }
 </script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+    var MOBILE_APPT_PAGE_SIZE = 15;
+    var mobileApptPageIndex = 0;
+    var mobileApptTotalCount = 0;
+
+    function formatAppointmentCardDateTime(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'N/A';
+        let day = String(date.getDate()).padStart(2, '0');
+        let month = String(date.getMonth() + 1).padStart(2, '0');
+        let year = date.getFullYear();
+        let hours = date.getHours();
+        let minutes = String(date.getMinutes()).padStart(2, '0');
+        let seconds = String(date.getSeconds()).padStart(2, '0');
+        let ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        hours = String(hours).padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+    }
+
+    function updateAppointmentPager() {
+        var pager = $("#appointments-pager");
+        var total = mobileApptTotalCount || 0;
+        if (total === 0 || total <= MOBILE_APPT_PAGE_SIZE) {
+            pager.addClass("d-none");
+            return;
+        }
+        pager.removeClass("d-none");
+        var totalPages = Math.ceil(total / MOBILE_APPT_PAGE_SIZE);
+        var currentPage = mobileApptPageIndex + 1;
+        $("#appt-pager-info").text("Page " + currentPage + " of " + totalPages);
+        $("#appt-pager-prev").prop("disabled", mobileApptPageIndex <= 0);
+        $("#appt-pager-next").prop("disabled", mobileApptPageIndex >= totalPages - 1);
+    }
+
     $(document).ready(function () {
         loadAppointments();
+        $(document).on("click", "#appt-pager-prev", function () {
+            if (mobileApptPageIndex > 0) {
+                loadAppointments(mobileApptPageIndex - 1);
+            }
+        });
+        $(document).on("click", "#appt-pager-next", function () {
+            var totalPages = Math.ceil(mobileApptTotalCount / MOBILE_APPT_PAGE_SIZE);
+            if (mobileApptPageIndex < totalPages - 1) {
+                loadAppointments(mobileApptPageIndex + 1);
+            }
+        });
     });
 
-    function loadAppointments() {
+    function loadAppointments(pageIndex) {
+        if (typeof pageIndex === "number" && !isNaN(pageIndex)) {
+            mobileApptPageIndex = pageIndex;
+        }
+        var skip = mobileApptPageIndex * MOBILE_APPT_PAGE_SIZE;
         $.ajax({
             url: '/Patient/Index?handler=AppointmentViewCard&id=' + '@Model.Id',
             type: 'POST',
             contentType: 'application/json',
+            data: JSON.stringify({ skip: skip, take: MOBILE_APPT_PAGE_SIZE }),
             success: function (response) {
-                console.log(response); // Debugging ke liye
-
-                var appointments = response.result;
+                mobileApptTotalCount = typeof response.count === "number" ? response.count : 0;
+                var appointments = response.result || [];
                 var container = $("#appointments-container");
                 container.empty();
 
+                if (appointments.length === 0) {
+                    updateAppointmentPager();
+                    return;
+                }
+
                 $.each(appointments, function (index, appointment) {
-                    console.log(appointment); // Check if appointment has correct data
                     var badgeClass = "";
                     if (appointment.statusName === "Booked" || appointment.statusName === "Completed") {
                         badgeClass = "badge-green";
                     } else if (appointment.statusName === "Cancelled") {
                         badgeClass = "badge-red";
                     }
-                    appointment.appointmentStartTime = formatDateTime(appointment.appointmentStartTime);
+                    var startLabel = formatAppointmentCardDateTime(appointment.appointmentStartTime);
                     var cardHtml = `
                                 <div class="ius-gridrow">
                                     <div class="ius-appbody">
@@ -3158,6 +3262,7 @@
                                             <input type="hidden" name="appointmentId" value="${appointment.id}">
 
                                                         <h3>${appointment.doctorName || 'N/A'}</h3>
+                                            ${(appointment.bookedForPatientName || appointment.patientName || appointment.name) ? `<div class="text-12 text-muted mt-1">For: ${appointment.bookedForPatientName || appointment.patientName || appointment.name}</div>` : ''}
                                             <div class="ius-apptyfo">
                                                         <span class="appinfo-type">${appointment.appoinmentType || 'N/A'}</span>
                                                 <span class="appinfo-dot"></span>
@@ -3181,7 +3286,7 @@
                                     <div class="ius-foo">
                                         <div class="ius-datetime">
                                             <div class="datetime-label text-sb">Date & Time</div>
-                                                    <div>${appointment.appointmentStartTime || 'N/A'}</div>
+                                                    <div>${startLabel || 'N/A'}</div>
                                         </div>
                                         <div class="ius-status">
                                              <div class="ius-badge ${badgeClass}">${appointment.statusName || 'N/A'}</div>
@@ -3191,31 +3296,12 @@
                             `;
                     container.append(cardHtml);
                 });
+                updateAppointmentPager();
             },
             error: function (xhr, status, error) {
                 console.error("Error fetching appointments: ", error);
             }
         });
-        function formatDateTime(dateString) {
-            if (!dateString) return 'N/A';
-            const date = new Date(dateString);
-
-            if (isNaN(date.getTime())) return 'N/A';
-
-            let day = String(date.getDate()).padStart(2, '0');
-            let month = String(date.getMonth() + 1).padStart(2, '0'); // Month zero-based hota hai
-            let year = date.getFullYear();
-            let hours = date.getHours();
-            let minutes = String(date.getMinutes()).padStart(2, '0');
-            let seconds = String(date.getSeconds()).padStart(2, '0');
-            let ampm = hours >= 12 ? 'PM' : 'AM';
-
-            hours = hours % 12;
-            hours = hours ? hours : 12; // 0 ko 12 mein convert karna
-            hours = String(hours).padStart(2, '0');
-
-            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
-        }
     }
 
 </script>

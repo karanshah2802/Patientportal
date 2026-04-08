@@ -97,7 +97,7 @@ namespace Patientportal.AllApicall
                 }
 
                 var json = await response.Content.ReadAsStringAsync(cancellationToken);
-                var token = ExtractTokenFromResponse(json);
+                var token = ExtractAccessTokenFromJson(json);
 
                 if (string.IsNullOrEmpty(token))
                 {
@@ -124,21 +124,20 @@ namespace Patientportal.AllApicall
             return GetTokenAsync().GetAwaiter().GetResult();
         }
 
-        private static string? ExtractTokenFromResponse(string json)
+        /// <summary>Parse AccessToken / JWT from OPS login or verify-otp JSON response.</summary>
+        public static string? ExtractAccessTokenFromJson(string json)
         {
             try
             {
                 using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
-                // OPS verify-otp / login response: AccessToken
                 foreach (var key in new[] { "AccessToken", "accessToken", "access_token", "token", "Token", "jwt" })
                 {
                     if (root.TryGetProperty(key, out var prop))
                         return prop.GetString();
                 }
 
-                // Nested: data.token
                 if (root.TryGetProperty("data", out var data))
                 {
                     foreach (var key in new[] { "token", "accessToken", "access_token" })

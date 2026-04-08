@@ -8,6 +8,10 @@ namespace Patientportal.Pages.Calendar
     [IgnoreAntiforgeryToken(Order = 2000)]
     public class IndexModel : PageModel
     {
+        [FromQuery(Name = "fromPatient")]
+        public string? FromPatient { get; set; }
+
+        public bool ReturnToPatientPortalBooking => string.Equals(FromPatient, "1", StringComparison.Ordinal);
         private readonly ILogger<IndexModel> _logger;
         //private readonly HttpClient _httpClient;
         private readonly HttpClient _httpClient;

@@ -351,6 +351,12 @@ textarea[disabled],
     display: flex;
     align-items: center;
     padding: 10px 20px;
+    position: relative;
+    z-index: 1040;
+}
+
+.ius-header .dropdown-menu {
+    z-index: 1041;
 }
 
 .hcol-pa {
@@ -368,8 +374,14 @@ textarea[disabled],
     background: var(--accent);
 }
 
+/* Entire user block (avatar + welcome + chevron) is the Bootstrap toggle — chevron on button, not parent, so clicks register consistently. */
 .hcol-usr {
-    padding-right: 30px;
+    padding-right: 0;
+    min-width: 0;
+}
+
+.ius-userp {
+    flex-shrink: 0;
 }
 
 .ius-userp img {
@@ -377,26 +389,29 @@ textarea[disabled],
     height: 36px;
     object-fit: cover;
     object-position: center center;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
 }
 
 .hcol-usr .dropdown-toggle {
     display: flex;
     align-items: center;
     gap: 12px;
-    padding: 5px 0;
+    width: 100%;
+    padding: 5px 28px 5px 0;
     border: 0;
     outline: none;
-    background: var(--white);
+    cursor: pointer;
+    text-align: left;
+    background-color: var(--white);
+    background-image: url('../assets/angle-down.svg');
+    background-position: center right 4px;
+    background-repeat: no-repeat;
 }
 
 .hcol-usr .dropdown-toggle::after {
     display: none;
-}
-
-.hcol-usr {
-    background-image: url('../assets/angle-down.svg');
-    background-position: center right 4px;
-    background-repeat: no-repeat;
 }
 
 .ius-useri {
@@ -407,6 +422,10 @@ textarea[disabled],
 .page {
     padding-top: 24px;
     padding-bottom: 40px;
+}
+
+.page-title {
+    margin-top: 0;
 }
 
 .ius-block + .ius-block {
@@ -481,6 +500,57 @@ textarea[disabled],
     width: 100%;
 }
 
+/* Patient Portal: appointments card — Book Appointment CTA on the left */
+.ius-appointment-card-head {
+    justify-content: flex-start;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.ius-appointment-card-head .ius-grid-filters {
+    margin-left: 0;
+    margin-right: auto;
+}
+
+/* Primary CTA: rounded blue button + arrow (Patient portal) */
+.ius-btn-book-appointment {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1.35rem;
+    font-family: 'manrope-md', 'Manrope', sans-serif;
+    font-weight: 700;
+    font-size: 0.8125rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #fff !important;
+    background-color: #0061ab;
+    border: 2px solid #1a1a1a;
+    border-radius: 14px;
+    text-decoration: none !important;
+    line-height: 1.2;
+    box-sizing: border-box;
+    transition: background-color 0.15s ease, filter 0.15s ease;
+}
+
+.ius-btn-book-appointment:hover {
+    color: #fff !important;
+    background-color: #004d8c;
+    text-decoration: none !important;
+    filter: brightness(1.02);
+}
+
+.ius-btn-book-appointment:focus-visible {
+    outline: 2px solid #0061ab;
+    outline-offset: 3px;
+}
+
+.ius-btn-book-appointment i {
+    font-size: 0.95em;
+    line-height: 1;
+}
+
 /*Grid / Table*/
 table thead {
     border-radius: var(--formradius);
@@ -540,6 +610,13 @@ table td {
 
 .ius-gridrow + .ius-gridrow {
     margin-top: 16px;
+}
+
+/* Patient portal mobile: list is after Note + scripts, so .ius-block + .ius-block gap does not apply */
+@media (max-width: 991.98px) {
+    #appointments-container {
+        margin-top: 20px;
+    }
 }
 
 .ius-appbody {
@@ -664,3 +741,199 @@ table td {
 }
 
 .login-form .form-control:focus { border-color: var(--primary); }
+
+/* Patient page — collapsible Patient Information */
+.patient-info-card-head {
+    margin-bottom: 0.5rem;
+}
+
+.patient-info-collapse-toggle:focus {
+    box-shadow: none;
+    outline: 2px solid var(--primary, #0d6efd);
+    outline-offset: 2px;
+}
+
+.patient-info-chevron {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+}
+
+.patient-info-collapse-toggle.collapsed .patient-info-chevron {
+    transform: rotate(-90deg);
+}
+
+/* Patient (and shared) portal — Add Dependent modal + dependents grid / mobile cards */
+#addDependentAppointmentModal .modal-dialog {
+    max-width: 520px;
+}
+
+#addDependentAppointmentModal .modal-content {
+    border-radius: 14px;
+    border: none;
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.14);
+    overflow: hidden;
+}
+
+#addDependentAppointmentModal .modal-header {
+    border-bottom: 1px solid #e9ecef;
+    padding: 1.1rem 1.35rem;
+}
+
+#addDependentAppointmentModal .modal-title {
+    font-weight: 600;
+    font-size: 1.15rem;
+    color: #212529;
+}
+
+#addDependentAppointmentModal .modal-body {
+    padding: 1.25rem 1.35rem 1.5rem;
+}
+
+#addDependentAppointmentModal .modal-footer {
+    border-top: 1px solid #e9ecef;
+    padding: 1rem 1.35rem;
+    gap: 0.5rem;
+    display: flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    align-items: center;
+    width: 100%;
+}
+
+.portal-dependent-toolbar {
+    width: 100%;
+}
+
+#addDependentAppointmentModal .form-label {
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 0.4rem;
+}
+
+#addDependentAppointmentModal .dependent-modal-text {
+    border-radius: 10px;
+    min-height: 45px;
+}
+
+#addDependentAppointmentModal .dependent-modal-ddl.e-ddl .e-input-group.e-control-wrapper {
+    border: 1px solid #5b9bd5 !important;
+    border-radius: 10px !important;
+    border-bottom: 2px solid #c62828 !important;
+    min-height: 45px;
+    background: #fff !important;
+}
+
+#addDependentAppointmentModal .dependent-modal-ddl.e-ddl.e-input-focus .e-input-group.e-control-wrapper {
+    box-shadow: 0 0 0 2px rgba(91, 155, 213, 0.28);
+}
+
+#addDependentAppointmentModal .dependent-modal-ddl .e-input {
+    font-size: 0.95rem;
+}
+
+body > .e-ddl.e-popup-open {
+    z-index: 2000 !important;
+}
+
+#GridPortalDependents .portal-dep-edit-btn {
+    display: inline-block;
+    margin: 4px 0;
+    padding: 1px 8px !important;
+    font-size: 0.8125rem;
+    line-height: 1.2;
+    min-height: 0;
+    border-radius: 6px;
+}
+
+#GridPortalDependents .e-rowcell:has(.portal-dep-edit-btn) {
+    padding-top: 0;
+    padding-bottom: 0;
+    vertical-align: middle;
+    min-width: 120px;
+    overflow: visible;
+}
+
+#portal-dependents-container .portal-dep-mobile-card {
+    background-color: #f4f6f9;
+    border: 1px solid #d8dee6;
+    border-radius: var(--formradius, 10px);
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+#portal-dependents-container .portal-dep-mobile-card .ius-appbody {
+    align-items: flex-start;
+    border-bottom-color: #c5cdd8;
+    padding-bottom: 14px;
+    margin-bottom: 14px;
+}
+
+#portal-dependents-container .portal-dep-mobile-card .ius-appinfo h3 {
+    font-family: 'manrope-sb', sans-serif;
+    font-size: 1.125rem;
+    line-height: 1.35;
+    color: #1a1a2e;
+    word-break: break-word;
+    margin: 0;
+}
+
+#portal-dependents-container .portal-dep-mobile-card .ius-apptyfo {
+    margin-top: 8px;
+    font-size: 0.875rem;
+    color: #1a1a2e;
+}
+
+#portal-dependents-container .portal-dep-mobile-card .ius-ctrls {
+    flex-shrink: 0;
+    padding-top: 2px;
+}
+
+#portal-dependents-container .portal-dep-mobile-edit-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: #0061ab;
+    font-size: 1.15rem;
+    line-height: 1;
+    padding: 0;
+    cursor: pointer;
+    transition: color 0.15s ease, background-color 0.15s ease;
+}
+
+#portal-dependents-container .portal-dep-mobile-edit-icon:hover {
+    color: #004d8c;
+    background-color: rgba(0, 97, 171, 0.08);
+}
+
+#portal-dependents-container .portal-dep-mobile-edit-icon:focus-visible {
+    outline: 2px solid #0061ab;
+    outline-offset: 2px;
+}
+
+#portal-dependents-container .portal-dep-mobile-card .ius-foo {
+    align-items: flex-end;
+}
+
+#portal-dependents-container .portal-dep-mobile-card .ius-datetime > div:not(.datetime-label) {
+    font-size: 1rem;
+    font-family: 'manrope-md', sans-serif;
+    color: #1a1a2e;
+    margin-top: 4px;
+    line-height: 1.35;
+}
+
+#portal-dependents-container .portal-dep-mobile-card .ius-status .ius-badge {
+    font-family: 'manrope-sb', sans-serif;
+    font-size: 11px;
+    line-height: 1.2;
+    padding: 6px 12px;
+    border-radius: 6px;
+}
+
+#portal-dependents-container .portal-dep-mobile-empty {
+    padding: 12px 4px;
+}
