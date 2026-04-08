@@ -228,14 +228,58 @@ namespace Patientportal.Pages.Patient
             }
         }
 
+        private static bool IsPortalRequestRejectedStatus(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return false;
+            var s = status.Trim();
+            return s.Equals("Rejected", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("Request Rejected", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("Declined", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("Denied", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("Not Approved", StringComparison.OrdinalIgnoreCase)
+                || s.Equals("Close", StringComparison.OrdinalIgnoreCase);
+        }
+
+        /// <summary>
+        /// Matches API variants: "Converted To Appointment", "Convertedtoappointment", "ConvertedToAppt", etc.
+        /// </summary>
+        private static bool IsPortalRequestConvertedToAppointmentStatus(string? status)
+        {
+            if (string.IsNullOrWhiteSpace(status))
+                return false;
+            var t = status.Trim();
+            if (t.Equals("Converted to Appt.", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            var compact = new string(t.Where(c => !char.IsWhiteSpace(c)).ToArray());
+            if (compact.Length == 0)
+                return false;
+
+            if (compact.Equals("ConvertedToAppointment", StringComparison.OrdinalIgnoreCase)
+                || compact.Equals("ConvertedToAppt", StringComparison.OrdinalIgnoreCase))
+                return true;
+
+            if (compact.StartsWith("Converted", StringComparison.OrdinalIgnoreCase)
+                && (compact.EndsWith("Appointment", StringComparison.OrdinalIgnoreCase)
+                    || compact.EndsWith("Appt", StringComparison.OrdinalIgnoreCase)))
+                return true;
+
+            return false;
+        }
+
         private static void NormalizePortalAppointmentRequestsForGrid(IEnumerable<AppointmentListItem> appointmentsRequest)
         {
             foreach (var appointmentes in appointmentsRequest)
             {
                 if (appointmentes.StatusName == "Reschedule")
                     appointmentes.StatusName = "Booked";
-                if (appointmentes.StatusName == "Converted To Appointment")
-                    appointmentes.StatusName = "Completed";
+
+                if (IsPortalRequestRejectedStatus(appointmentes.StatusName))
+                    appointmentes.StatusName = "Request Rejected";
+                else if (IsPortalRequestConvertedToAppointmentStatus(appointmentes.StatusName))
+                    appointmentes.StatusName = "Converted to Appt.";
+
                 if (appointmentes.AppoinmentType == "Consultation")
                     appointmentes.AppoinmentType = "Dr. Sejal In-person Consultation";
                 if (appointmentes.AppoinmentType == "Appointment Request for Online Consultation")
