@@ -157,6 +157,25 @@
         vertical-align: middle;
     }
 
+    /* In-person: date/time only via scheduler — block input and built-in date/time icons */
+    .datetimepicker-container.appointment-portal-dtp.scheduler-only-pick .e-input-group .e-input:not(textarea),
+    .datetimepicker-container.appointment-portal-dtp.scheduler-only-pick .e-input-group .e-input-group-icon {
+        pointer-events: none !important;
+        cursor: default !important;
+    }
+
+    /* No appointment type yet: block datetime picker and scheduler button */
+    .datetimepicker-container.appointment-portal-dtp.appt-datetime-disabled .e-input-group .e-input:not(textarea),
+    .datetimepicker-container.appointment-portal-dtp.appt-datetime-disabled .e-input-group .e-input-group-icon,
+    .datetimepicker-container.appointment-portal-dtp.appt-datetime-disabled .scheduler-icon {
+        pointer-events: none !important;
+        cursor: not-allowed !important;
+    }
+
+    .datetimepicker-container.appointment-portal-dtp.appt-datetime-disabled .scheduler-icon {
+        opacity: 0.45;
+    }
+
     .appointment-schedule-modal-wrap {
         height: calc(100vh - 56px);
         min-height: calc(100vh - 56px);
@@ -200,26 +219,47 @@
         overflow: hidden;
     }
 
+    /* Explicit fill + text so busy slots always match (not dependent on theme / read-only parent). */
     .appointment-schedule-modal-wrap .blocked-slot {
-        color: white;
+        background-color: #7AB6E0;
+        color: #fff;
         text-align: center;
-        font-weight: bold;
-        padding: 5px;
-        border-radius: 5px;
+        font-weight: 600;
+        padding: 5px 6px;
+        border-radius: 4px;
+        box-sizing: border-box;
+        min-height: 100%;
+        width: 100%;
+        line-height: 1.25;
     }
 
+    .appointment-schedule-modal-wrap .e-schedule .e-hide-childs > * {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        min-height: 100% !important;
+        height: 100% !important;
+    }
+
+    .appointment-schedule-modal-wrap .e-appointment.e-read-only {
+        background: #7AB6E0 !important;
+    }
+
+    /* Leave / holiday: keep #e9ecef family but full opacity, neutral text, subtle depth (pairs with .blocked-slot blue). */
     .appointment-schedule-modal-wrap .doctor-leave-cell {
-        background-color: #e9ecef !important;
-        color: #721c24 !important;
+        background: linear-gradient(180deg, #f4f6f8 0%, #e9ecef 45%, #e3e7eb 100%) !important;
+        color: #7AB6E0 !important;
         pointer-events: none;
-        opacity: 0.6;
+        opacity: 1 !important;
+        box-shadow: inset 0 0 0 1px rgba(0, 97, 171, 0.06);
     }
 
     .appointment-schedule-modal-wrap .holiday-cell {
-        background-color: #dee2e6 !important;
-        color: #721c24 !important;
+        background: linear-gradient(180deg, #eceef1 0%, #dee2e6 50%, #d8dce0 100%) !important;
+        color: #495057 !important;
         pointer-events: none;
-        opacity: 0.6;
+        opacity: 1 !important;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
     }
 
     .appointment-schedule-modal-wrap .e-quick-popup-wrapper.e-lib.e-popup.e-control.e-popup-open {
@@ -465,12 +505,12 @@
                     <div class="row">
                         <div class="col-md-6 col-xl-4">
                             <label for="pi-formofappt" class="form-label">Type of Appointment*</label>
-                            <ejs-dropdownlist class="form-control" id="pi-formofappt" style="height:45px;" DataSource="FormofAppointment" change="onAppointmentTypeChange"></ejs-dropdownlist>
+                            <ejs-dropdownlist class="form-control" id="pi-formofappt" style="height:45px;" TValue="string" DataSource="FormofAppointment" Placeholder="Select type of appointment" change="onAppointmentTypeChange"></ejs-dropdownlist>
                             <span id="pi-formofappt-msg" class="text-danger"></span>
                         </div>   
                         <div class="col-md-6 col-xl-4">
                             <label for="pi-resched" class="form-label">Appointment Date &amp; Time*</label>
-                            <div class="datetimepicker-container appointment-portal-dtp" style="position: relative;">
+                            <div id="pi-resched-dtp-wrap" class="datetimepicker-container appointment-portal-dtp" style="position: relative;">
                                 <ejs-datetimepicker id="pi-resched" cssClass="appointment-dtp-ejs" step="15" min="DateTime.Today" style="height:45px;" value="@Model.SelectedDateTime?.LocalDateTime" format="@Model.EjsDateTimePattern" placeholder="Select date and time"></ejs-datetimepicker>
                                 <button type="button" class="scheduler-icon" id="open-slot-calendar-btn" title="Pick a slot from the full calendar">
                                     <i class="fas fa-calendar-alt" aria-hidden="true"></i>
@@ -699,7 +739,7 @@
                                 <span id="dep-modal-genderspan" class="text-danger small d-block mt-1"></span>
                             </div>
                             <div class="col-md-6">
-                                <label class="form-label" for="dep-modal-relation">Relation<span class="text-danger">*</span></label>
+                                <label class="form-label" for="dep-modal-relation">Relation to primary patient<span class="text-danger">*</span></label>
                                 <ejs-dropdownlist id="dep-modal-relation"
                                                   cssClass="dependent-modal-ddl form-control"
                                                   style="height: 45px;"
@@ -1089,7 +1129,27 @@
     </div>
 
     <script id="appointmentBlockTemplate" type="text/x-template">
-        <div class="blocked-slot">Not available</div>
+        <div class="blocked-slot" style="background-color:#7AB6E0;color:#fff;text-align:center;font-weight:600;padding:5px 6px;border-radius:4px;box-sizing:border-box;min-height:100%;width:100%;line-height:1.25;">Not available</div>
+    </script>
+
+    @* Same anchor-date behaviour as Patient when opening the slot modal from a reschedule link. *@
+    <script>
+        document.addEventListener("click", function (e) {
+            var target = e.target.closest(".app-resched");
+            if (target && target.dataset.starttime) {
+                var originalDate = new Date(target.dataset.starttime);
+                var today = new Date();
+                today.setHours(0, 0, 0, 0);
+                var appointmentDate = new Date(originalDate);
+                appointmentDate.setHours(0, 0, 0, 0);
+                if (appointmentDate >= today) {
+                    originalDate.setDate(originalDate.getDate() + 7);
+                    window.__patientRescheduleSchedulerAnchorDate = originalDate;
+                } else {
+                    window.__patientRescheduleSchedulerAnchorDate = new Date();
+                }
+            }
+        });
     </script>
 
     <script>
@@ -1099,9 +1159,40 @@
             var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves));
             var appointmentSlotScheduleInited = false;
 
+            /** Bootstrap md and below: Day; wider: Week (matches common phone/tablet portrait breakpoints). */
+            function appointmentSlotScheduleDefaultView() {
+                return window.matchMedia('(max-width: 767.98px)').matches ? 'Day' : 'Week';
+            }
+
+            /**
+             * Syncfusion Week view renders continuation days of a multi-day timed event in the all-day header.
+             * Split each merged span into one event per local calendar day, clipped to visible work hours,
+             * so every blocked day shows a full column in the time grid (matches startHour/endHour on the Schedule).
+             */
+            function splitMergedIntervalIntoWorkdaySegments(interval, workStartH, workStartM, workEndH, workEndM) {
+                var segments = [];
+                var start = interval.start instanceof Date ? interval.start : new Date(interval.start);
+                var end = interval.end instanceof Date ? interval.end : new Date(interval.end);
+                if (isNaN(start.getTime()) || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+                    return segments;
+                }
+                var cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                var endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                while (cursor.getTime() <= endDay.getTime()) {
+                    var workStart = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), workStartH, workStartM, 0, 0);
+                    var workEnd = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), workEndH, workEndM, 0, 0);
+                    var segStart = start.getTime() > workStart.getTime() ? start : workStart;
+                    var segEnd = end.getTime() < workEnd.getTime() ? end : workEnd;
+                    if (segStart.getTime() < segEnd.getTime()) {
+                        segments.push({ start: new Date(segStart), end: new Date(segEnd) });
+                    }
+                    cursor.setDate(cursor.getDate() + 1);
+                }
+                return segments;
+            }
+
             /**
              * Merge overlapping or nearly-touching intervals (gapMs absorbs API sub-second / rounding gaps).
-             * One continuous busy span => one calendar event (avoids Syncfusion splitting into parallel columns).
              */
             function mergeDateIntervals(intervals, gapMs) {
                 gapMs = gapMs == null ? 120000 : gapMs;
@@ -1161,10 +1252,11 @@
                 if (!scheduleEl || !scheduleEl.ej2_instances || !scheduleEl.ej2_instances[0]) return;
                 appointmentSlotScheduleInited = true;
                 var scheduleObj = scheduleEl.ej2_instances[0];
+                scheduleObj.currentView = appointmentSlotScheduleDefaultView();
                 var selectedDoctorId = 1;
 
-                var doctorLeaveSlots = doctorLeaves
-                    .filter(function (x) { return x.doctorId === selectedDoctorId; })
+                var doctorLeaveSlots = (doctorLeaves || [])
+                    .filter(function (x) { return Number(x.doctorId) === Number(selectedDoctorId); })
                     .map(function (x) {
                         return {
                             start: new Date(x.startDateTime),
@@ -1173,7 +1265,7 @@
                     });
                 window.calendarDoctorLeaveSlots = doctorLeaveSlots;
 
-                var holidayDates = holidays.map(function (item) {
+                var holidayDates = (holidays || []).map(function (item) {
                     return new Date(item.startDate).toISOString().split('T')[0];
                 });
 
@@ -1182,14 +1274,18 @@
                     return { start: slot.start, end: slot.end };
                 });
                 var mergedAll = mergeDateIntervals(blockIntervals.concat(leaveIntervals), 120000);
-                var blockAppointments = mergedAll.map(function (m, idx) {
-                    return {
-                        Id: 'busy-merged-' + idx + '-' + m.start.getTime(),
-                        Subject: 'Not available',
-                        StartTime: m.start,
-                        EndTime: m.end,
-                        IsReadonly: true
-                    };
+                var blockAppointments = [];
+                mergedAll.forEach(function (m, idx) {
+                    splitMergedIntervalIntoWorkdaySegments(m, 10, 0, 19, 15).forEach(function (seg, j) {
+                        blockAppointments.push({
+                            Id: 'busy-day-' + idx + '-' + j + '-' + seg.start.getTime(),
+                            Subject: 'Not available',
+                            StartTime: seg.start,
+                            EndTime: seg.end,
+                            IsReadonly: true,
+                            CategoryColor: '#7AB6E0'
+                        });
+                    });
                 });
 
                 scheduleObj.renderCell = function (args) {
@@ -1226,7 +1322,16 @@
                     slotModalEl.addEventListener('shown.bs.modal', function () {
                         var el = document.getElementById('appointmentSlotSchedule');
                         if (el && el.ej2_instances && el.ej2_instances[0]) {
-                            el.ej2_instances[0].refresh();
+                            var inst = el.ej2_instances[0];
+                            inst.currentView = appointmentSlotScheduleDefaultView();
+                            if (window.__patientRescheduleSchedulerAnchorDate) {
+                                inst.selectedDate = new Date(window.__patientRescheduleSchedulerAnchorDate);
+                                window.__patientRescheduleSchedulerAnchorDate = null;
+                            }
+                            inst.refresh();
+                            if (typeof inst.refreshLayout === 'function') {
+                                setTimeout(function () { inst.refreshLayout(); }, 100);
+                            }
                         }
                     });
                 }
@@ -1247,11 +1352,9 @@
 
         function onAppointmentSlotCellClick(args) {
             args.cancel = true;
-            var currentDateTime = new Date();
             var clickedDateTime = new Date(args.startTime);
-            if (clickedDateTime < currentDateTime) {
-                alert('You cannot select this time or date for appointments.');
-                return;
+            if (typeof window.portalValidateAppointmentSlotClickTime === "function") {
+                if (!window.portalValidateAppointmentSlotClickTime(clickedDateTime)) return;
             }
             if (clickedDateTime.getDay() === 0) {
                 return;
@@ -1387,12 +1490,15 @@
         $('#open-slot-calendar-btn').on('click', function () {
             var ddlEl = document.getElementById('pi-formofappt');
             var ddl = ddlEl && ddlEl.ej2_instances && ddlEl.ej2_instances[0];
-            var t = ddl ? ddl.value : '';
-            if (t === 'Dr. Sejal Online Consultation') {
+            var t = ddl && ddl.value != null && ddl.value !== '' ? String(ddl.value) : '';
+            if (!t) {
+                return;
+            }
+            if (t === 'Dr. Sejal Online Consultation' || t === 'Appointment Request for Procedures') {
                 if (typeof toastr !== 'undefined') {
-                    toastr.info('For online consultation, use the date and time field.');
+                    toastr.info('For this appointment type, use the date and time field below.');
                 } else {
-                    alert('For online consultation, use the date and time field.');
+                    alert('For this appointment type, use the date and time field below.');
                 }
                 return;
             }
@@ -1703,23 +1809,109 @@
 </script>
 
 <script>
-    function onAppointmentTypeChange(args) {
-        var dateTimePicker = document.getElementById('pi-resched').ej2_instances[0];
-        var selectedDateTime = @(Model.SelectedDateTime.HasValue
-            ? Html.Raw($"new Date('{Model.SelectedDateTime.Value.ToString("o", CultureInfo.InvariantCulture)}')")
-            : Html.Raw("null"));
-        var $calBtn = typeof jQuery !== 'undefined' ? jQuery('#open-slot-calendar-btn') : null;
-        if (args.value === "Dr. Sejal Online Consultation") {
-            if (selectedDateTime != null && !isNaN(selectedDateTime.getTime())) {
-                dateTimePicker.value = selectedDateTime;
+    (function () {
+        var APPT_IN_PERSON = 'Dr. Sejal In-person Consultation';
+        var APPT_ONLINE = 'Dr. Sejal Online Consultation';
+        var APPT_PROCEDURES = 'Appointment Request for Procedures';
+        var __lastAppointmentType = '';
+
+        function computeManualMinDateTime() {
+            var d = new Date();
+            d.setTime(d.getTime() + 60 * 60 * 1000);
+            var mins = d.getMinutes();
+            var rem = mins % 15;
+            if (rem !== 0) {
+                d.setMinutes(mins + (15 - rem), 0, 0);
+            } else {
+                d.setSeconds(0, 0);
             }
-            dateTimePicker.readonly = true;
-            if ($calBtn && $calBtn.length) $calBtn.addClass('d-none');
-        } else {
-            dateTimePicker.readonly = false;
-            if ($calBtn && $calBtn.length) $calBtn.removeClass('d-none');
+            return d;
         }
-    }
+        window.__appointmentPortalComputeManualMin = computeManualMinDateTime;
+
+        function isAppointmentTypeSelected(t) {
+            return t === APPT_IN_PERSON || t === APPT_ONLINE || t === APPT_PROCEDURES;
+        }
+
+        window.onAppointmentTypeChange = function (args) {
+            var wrap = document.getElementById('pi-resched-dtp-wrap');
+            var dateTimePickerEl = document.getElementById('pi-resched');
+            if (!dateTimePickerEl || !dateTimePickerEl.ej2_instances || !dateTimePickerEl.ej2_instances[0]) return;
+            var dateTimePicker = dateTimePickerEl.ej2_instances[0];
+            var selectedDateTime = @(Model.SelectedDateTime.HasValue
+                ? Html.Raw($"new Date('{Model.SelectedDateTime.Value.ToString("o", CultureInfo.InvariantCulture)}')")
+                : Html.Raw("null"));
+            var $calBtn = typeof jQuery !== 'undefined' ? jQuery('#open-slot-calendar-btn') : null;
+            var ddlForVal = document.getElementById('pi-formofappt');
+            var ddlInstForVal = ddlForVal && ddlForVal.ej2_instances && ddlForVal.ej2_instances[0];
+            var raw = '';
+            if (args && args.value != null && args.value !== '') raw = String(args.value);
+            else if (ddlInstForVal && ddlInstForVal.value != null && ddlInstForVal.value !== '') raw = String(ddlInstForVal.value);
+            var t = raw.trim();
+            var prevType = __lastAppointmentType;
+            var prevTrim = (prevType || '').trim();
+            if (isAppointmentTypeSelected(prevTrim) && prevTrim !== t) {
+                dateTimePicker.value = null;
+            }
+
+            if (!isAppointmentTypeSelected(t)) {
+                if (wrap) {
+                    wrap.classList.remove('scheduler-only-pick');
+                    wrap.classList.add('appt-datetime-disabled');
+                }
+                dateTimePicker.readonly = true;
+                if (typeof dateTimePicker.openOnFocus === 'boolean') dateTimePicker.openOnFocus = false;
+                var sotNone = new Date();
+                sotNone.setHours(0, 0, 0, 0);
+                dateTimePicker.min = sotNone;
+                dateTimePicker.value = null;
+                if ($calBtn && $calBtn.length) {
+                    $calBtn.removeClass('d-none').prop('disabled', true).attr('aria-disabled', 'true');
+                }
+                dateTimePicker.dataBind();
+                __lastAppointmentType = t;
+                return;
+            }
+
+            if (wrap) wrap.classList.remove('appt-datetime-disabled');
+
+            if (wrap) {
+                if (t === APPT_IN_PERSON) wrap.classList.add('scheduler-only-pick');
+                else wrap.classList.remove('scheduler-only-pick');
+            }
+
+            if ($calBtn && $calBtn.length) {
+                $calBtn.prop('disabled', false).removeAttr('aria-disabled');
+            }
+
+            if (t === APPT_IN_PERSON) {
+                dateTimePicker.readonly = true;
+                if (typeof dateTimePicker.openOnFocus === 'boolean') dateTimePicker.openOnFocus = false;
+                var startOfToday = new Date();
+                startOfToday.setHours(0, 0, 0, 0);
+                dateTimePicker.min = startOfToday;
+                if ($calBtn && $calBtn.length) $calBtn.removeClass('d-none');
+            } else if (t === APPT_ONLINE || t === APPT_PROCEDURES) {
+                dateTimePicker.readonly = false;
+                /* Default false: open via date/time icons. true can block icon-open behavior in some EJ2 builds. */
+                if (typeof dateTimePicker.openOnFocus === 'boolean') dateTimePicker.openOnFocus = false;
+                var minManual = computeManualMinDateTime();
+                dateTimePicker.min = minManual;
+                if (dateTimePicker.value && dateTimePicker.value < minManual) {
+                    dateTimePicker.value = null;
+                }
+                if (!dateTimePicker.value && selectedDateTime != null
+                    && !isNaN(selectedDateTime.getTime()) && selectedDateTime >= minManual
+                    && !isAppointmentTypeSelected(prevTrim)) {
+                    dateTimePicker.value = selectedDateTime;
+                }
+                if ($calBtn && $calBtn.length) $calBtn.addClass('d-none');
+            }
+
+            dateTimePicker.dataBind();
+            __lastAppointmentType = t;
+        };
+    })();
 
     document.addEventListener("DOMContentLoaded", function () {
         var dateTimePicker = document.getElementById('pi-resched');
@@ -1730,6 +1922,7 @@
             dtpInst.min = startOfToday;
         }
         var appointmentDropdown = document.getElementById('pi-formofappt').ej2_instances[0];
+        var hadSessionFormRestore = false;
         try {
             var rawRestore = sessionStorage.getItem("pp_appt_restore_after_otp");
             if (rawRestore) {
@@ -1737,6 +1930,7 @@
                 if (pr && (pr.formType || pr.dateTimeIso)) {
                     sessionStorage.removeItem("pp_appt_restore_after_otp");
                     if (pr.formType && appointmentDropdown) {
+                        hadSessionFormRestore = true;
                         appointmentDropdown.value = pr.formType;
                         appointmentDropdown.dataBind();
                     }
@@ -1750,6 +1944,11 @@
                 }
             }
         } catch (restoreEx) { /* keep defaults */ }
+        if (!hadSessionFormRestore && appointmentDropdown && (appointmentDropdown.value == null || appointmentDropdown.value === '')) {
+            appointmentDropdown.value = null;
+            appointmentDropdown.text = null;
+            appointmentDropdown.dataBind();
+        }
         onAppointmentTypeChange({ value: appointmentDropdown.value });
 
         var apptFor = document.getElementById("pi-appointment-for");
@@ -1922,6 +2121,157 @@ function validateAge(input) {
 
 
 <script>
+    (function (w) {
+        function portalAppointmentParseJsonBody(xhr) {
+            var txt = xhr.responseText;
+            if (txt && txt.charCodeAt(0) === 0xfeff) txt = txt.slice(1);
+            var trimmed = txt ? String(txt).trim() : "";
+            if (trimmed.length > 0 && (trimmed.charAt(0) === "{" || trimmed.charAt(0) === "[")) {
+                try {
+                    return JSON.parse(trimmed);
+                } catch (e) {
+                    /* fall through to responseJSON */
+                }
+            }
+            if (xhr.responseJSON) return xhr.responseJSON;
+            return null;
+        }
+        function portalAppointmentCoalesceHumanMessage(j) {
+            function nz(v) {
+                if (v == null) return null;
+                var s = String(v).trim();
+                return s ? s : null;
+            }
+            if (!j) return null;
+            var m = nz(j.message) || nz(j.Message) || nz(j.errorMessage) || nz(j.ErrorMessage)
+                || nz(j.description) || nz(j.Description) || nz(j.detail) || nz(j.Detail)
+                || nz(j.title) || nz(j.Title);
+            if (m) return m;
+            var errs = j.errors || j.Errors;
+            if (!errs) return null;
+            if (Array.isArray(errs) && errs.length) {
+                var p = [];
+                for (var i = 0; i < errs.length; i++) {
+                    var t = nz(errs[i]);
+                    if (t) p.push(t);
+                }
+                return p.length ? p.join(" ") : null;
+            }
+            if (typeof errs === "object") {
+                var p2 = [];
+                for (var k in errs) {
+                    if (!Object.prototype.hasOwnProperty.call(errs, k)) continue;
+                    var v = errs[k];
+                    if (Array.isArray(v)) {
+                        for (var ii = 0; ii < v.length; ii++) {
+                            var t2 = nz(v[ii]);
+                            if (t2) p2.push(t2);
+                        }
+                    } else {
+                        var t3 = nz(v);
+                        if (t3) p2.push(t3);
+                    }
+                }
+                return p2.length ? p2.join(" ") : null;
+            }
+            return null;
+        }
+        w.portalAppointmentMessageFromJsonResult = function (r) {
+            return portalAppointmentCoalesceHumanMessage(r)
+                || (r && (String(r.errorMessage || r.ErrorMessage || "").trim() || null));
+        };
+        w.portalAppointmentParseError = function (xhr) {
+            var j = portalAppointmentParseJsonBody(xhr);
+            if (!j) return { errorCode: null, message: null, errors: null, minimumLeadHours: null };
+            var human = portalAppointmentCoalesceHumanMessage(j);
+            var rawEc = j.errorCode != null ? j.errorCode : (j.ErrorCode != null ? j.ErrorCode : (j.error && (j.error.code != null ? j.error.code : j.error.Code)));
+            var errorCodeStr = rawEc == null || rawEc === "" ? null : String(rawEc);
+            return {
+                errorCode: errorCodeStr,
+                message: human,
+                errors: j.errors || j.Errors || null,
+                minimumLeadHours: j.minimumLeadHours != null ? j.minimumLeadHours : (j.MinimumLeadHours != null ? j.MinimumLeadHours : null)
+            };
+        };
+        w.portalAppointmentFormatErrors = function (b) {
+            if (!b || !b.errors) return null;
+            if (Array.isArray(b.errors) && b.errors.length) return b.errors.join(" ");
+            if (typeof b.errors === "object") {
+                var parts = [];
+                for (var k in b.errors) {
+                    if (!Object.prototype.hasOwnProperty.call(b.errors, k)) continue;
+                    var v = b.errors[k];
+                    if (Array.isArray(v)) parts = parts.concat(v);
+                    else if (v) parts.push(String(v));
+                }
+                return parts.length ? parts.join(" ") : null;
+            }
+            return null;
+        };
+        w.portalAppointmentHandleHttpError = function (xhr, opts) {
+            opts = opts || {};
+            var $span = opts.$span;
+            var onDone = opts.onDone;
+            function finish() { if (typeof onDone === "function") onDone(); }
+            function showGeneric(msg) {
+                if ($span && $span.length) $span.text(msg).show();
+                if (typeof toastr !== "undefined") toastr.error(msg);
+                else alert(msg);
+                finish();
+            }
+            if (xhr.status !== 400) {
+                var parsed = w.portalAppointmentParseError(xhr);
+                var msg = parsed.message || w.portalAppointmentFormatErrors(parsed)
+                    || (xhr.responseText && xhr.responseText.length < 400 ? String(xhr.responseText).trim() : null)
+                    || "Request failed.";
+                showGeneric(msg);
+                return;
+            }
+            var b = w.portalAppointmentParseError(xhr);
+            var code = b.errorCode;
+            var text = b.message || w.portalAppointmentFormatErrors(b)
+                || (xhr.responseText && xhr.responseText.length < 400 ? String(xhr.responseText).trim() : null)
+                || "Request could not be completed.";
+            if (code === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                if (typeof toastr !== "undefined") toastr.warning(text);
+                else alert(text);
+                if ($span && $span.length) $span.text(text).show();
+                finish();
+                return;
+            }
+            if (code === "APPOINTMENT_TIME_REQUIRED") {
+                if ($span && $span.length) $span.text(text).show();
+                if (typeof toastr !== "undefined") toastr.info(text);
+                else alert(text);
+                finish();
+                return;
+            }
+            if (code === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
+                if ($span && $span.length) $span.text(text).show();
+                if (typeof toastr !== "undefined") toastr.warning(text);
+                else alert(text);
+                finish();
+                return;
+            }
+            showGeneric(text);
+        };
+        w.portalNotifySlotPick = function (msg) {
+            if (typeof toastr !== "undefined") toastr.warning(msg);
+            else alert(msg);
+        };
+        w.portalValidateAppointmentSlotClickTime = function (clickedDateTime) {
+            var now = new Date();
+            if (clickedDateTime < now) {
+                w.portalNotifySlotPick("This time is in the past. Please choose a future date and time.");
+                return false;
+            }
+            if (clickedDateTime.getTime() - now.getTime() < 60 * 60 * 1000) {
+                w.portalNotifySlotPick("Appointment must be at least one hour from now.");
+                return false;
+            }
+            return true;
+        };
+    })(window);
     $(document).ready(function () {
         var depModalEl = document.getElementById("addDependentAppointmentModal");
         if (depModalEl) {
@@ -2148,6 +2498,8 @@ function validateAge(input) {
             maxDateTime.setFullYear(maxDateTime.getFullYear() + 10);
             var startHour = 10;
             var endHour = 19;
+            var manualPickerApptType = formTypeText === "Dr. Sejal Online Consultation"
+                || formTypeText === "Appointment Request for Procedures";
 
             if (!selectedApptDate) {
                 $("#AppointmentDateSpan").text("Appointment date and time is required.");
@@ -2161,8 +2513,8 @@ function validateAge(input) {
                 } else if (selectedApptDate > maxDateTime) {
                     $("#AppointmentDateSpan").text("Appointment cannot be more than 10 years from today.");
                     isValid = false;
-                } else if ((selectedApptDate.getTime() - currentDateTime.getTime()) < 30 * 60 * 1000) {
-                    $("#AppointmentDateSpan").text("Appointment must be at least 30 minutes from now.");
+                } else if (manualPickerApptType && (selectedApptDate.getTime() - currentDateTime.getTime()) < 60 * 60 * 1000) {
+                    $("#AppointmentDateSpan").text("Appointment must be at least one hour from now.");
                     isValid = false;
                 } else if (selectedApptDate.getDay() === 0) {
                     $("#AppointmentDateSpan").text("Appointments cannot be scheduled on Sunday.");
@@ -2382,11 +2734,27 @@ function validateAge(input) {
                     try {
                         var ok = response && (response.isSuccess === true || response.IsSuccess === true);
                         if (!ok) {
-                            var err = (response && (response.errorMessage || response.ErrorMessage || response.message || response.Message)) || "Could not book this appointment.";
-                            $("#AppointmentDateSpan").text(err).show();
+                            var ec = response && (response.errorCode || response.ErrorCode);
+                            var err = (response && w.portalAppointmentMessageFromJsonResult(response)) || "Could not book this appointment.";
+                            if (ec === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                                if (typeof toastr !== "undefined") toastr.warning(err);
+                                else alert(err);
+                                $("#AppointmentDateSpan").text(err).show();
+                            } else if (ec === "APPOINTMENT_TIME_REQUIRED") {
+                                $("#AppointmentDateSpan").text(err).show();
+                                if (typeof toastr !== "undefined") toastr.info(err);
+                                else alert(err);
+                            } else if (ec === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
+                                $("#AppointmentDateSpan").text(err).show();
+                                if (typeof toastr !== "undefined") toastr.warning(err);
+                                else alert(err);
+                            } else {
+                                $("#AppointmentDateSpan").text(err).show();
+                                if (typeof toastr !== "undefined") toastr.error(err);
+                                else alert(err);
+                            }
                             if ($("#pi-portal-profile-msg").length) $("#pi-portal-profile-msg").text("");
                             resetBookButton();
-                            if (typeof toastr !== "undefined") toastr.error(err);
                             return;
                         }
                         resetBookButton();
@@ -2421,14 +2789,10 @@ function validateAge(input) {
                     }
                 },
                 error: function (xhr) {
-                    resetBookButton();
-                    var t = "Request failed.";
-                    try {
-                        if (xhr.responseJSON && (xhr.responseJSON.errorMessage || xhr.responseJSON.message)) {
-                            t = xhr.responseJSON.errorMessage || xhr.responseJSON.message;
-                        } else if (xhr.responseText) t = xhr.responseText.slice(0, 500);
-                    } catch (ignore) { }
-                    alert("Error: " + t);
+                    portalAppointmentHandleHttpError(xhr, {
+                        $span: $("#AppointmentDateSpan"),
+                        onDone: resetBookButton
+                    });
                 }
             });
             } catch (err) {

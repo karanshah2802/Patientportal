@@ -203,12 +203,92 @@ namespace Patientportal.Pages.Appointment
         {
             string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
             string token = await _opsTokenService.GetTokenAsync();
-            string apiUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
-            string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
-            string apiLeave = $"{baseUrl}/api/v1/Holiday/getLeaveList";
-            Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl, token) ?? new List<Holidays>();
-            Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>();
-            Leaves = await _apiService.GetAsync<List<Leave>>(apiLeave, token) ?? new List<Leave>();
+            string holidayUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
+            string leaveUrl = $"{baseUrl}/api/v1/Holiday/getLeaveList";
+
+            long portalProfileId = LoggedInProfileId > 0
+                ? LoggedInProfileId
+                : (PortalPatientProfile != null && PortalPatientProfile.Id > 0 ? PortalPatientProfile.Id : 0L);
+
+            string blocksUrl = portalProfileId > 0
+                ? $"{baseUrl}/api/v1/Appointment/GetAppointmentsPortalByDoctor?id={portalProfileId}"
+                : $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
+
+            if (portalProfileId <= 0)
+            {
+                _logger.LogInformation(
+                    "Scheduler: no portal profile id (anonymous or missing claim); using public blocks endpoint. Url={Url}",
+                    blocksUrl);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "Scheduler: same as Patient portal. GetAppointmentsPortalByDoctor id={ProfileId} Url={Url}",
+                    portalProfileId,
+                    blocksUrl);
+            }
+
+            Holidays = await _apiService.GetAsync<List<Holidays>>(holidayUrl, token) ?? new List<Holidays>();
+
+            var (blocksResult, blocksRawBody, blocksHttpStatus) =
+                await _apiService.GetAsyncWithRawBody<List<AppointmentListItem>>(blocksUrl, token);
+            Doctorblocktime = (blocksResult ?? new List<AppointmentListItem>())
+                .Where(a => a.BlocksDoctorScheduleSlot())
+                .ToList();
+
+            _logger.LogInformation(
+                "Scheduler blocks GET: Url={Url} HttpStatus={Status} RawBodyLength={RawLen} DeserializedCount={DeserCount} AfterBlocksDoctorScheduleSlot={FilteredCount}",
+                blocksUrl,
+                (int)blocksHttpStatus,
+                blocksRawBody?.Length ?? 0,
+                blocksResult?.Count ?? 0,
+                Doctorblocktime.Count);
+
+            if (blocksHttpStatus != HttpStatusCode.OK || Doctorblocktime.Count == 0)
+            {
+                _logger.LogWarning(
+                    "Scheduler blocks response detail: Status={Status} BodySample={BodySample}",
+                    (int)blocksHttpStatus,
+                    TruncateForSchedulerLog(blocksRawBody, 4000));
+            }
+
+            var (leavesResult, leavesRawBody, leavesHttpStatus) =
+                await _apiService.GetAsyncWithRawBody<List<Leave>>(leaveUrl, token);
+            Leaves = leavesResult ?? new List<Leave>();
+
+            var leavesDoctor1 = Leaves.Where(l => l.DoctorId == 1).ToList();
+            _logger.LogInformation(
+                "Scheduler leave GET: Url={Url} HttpStatus={Status} RawBodyLength={RawLen} TotalLeaves={Total} DoctorId==1 count={Doctor1Count}",
+                leaveUrl,
+                (int)leavesHttpStatus,
+                leavesRawBody?.Length ?? 0,
+                Leaves.Count,
+                leavesDoctor1.Count);
+
+            if (Leaves.Count > 0 && leavesDoctor1.Count == 0)
+            {
+                var sampleDoctorIds = string.Join(", ", Leaves.Take(12).Select(l => l.DoctorId?.ToString() ?? "(null)"));
+                _logger.LogWarning(
+                    "Scheduler leave: no rows with DoctorId==1. Sample DoctorId from first 12 rows: [{Sample}] RawBodySample={BodySample}",
+                    sampleDoctorIds,
+                    TruncateForSchedulerLog(leavesRawBody, 4000));
+            }
+            else if (Leaves.Count == 0)
+            {
+                _logger.LogWarning(
+                    "Scheduler leave list empty. HttpStatus={Status} BodySample={BodySample}",
+                    (int)leavesHttpStatus,
+                    TruncateForSchedulerLog(leavesRawBody, 4000));
+            }
+        }
+
+        private static string TruncateForSchedulerLog(string? text, int maxChars)
+        {
+            if (string.IsNullOrEmpty(text))
+                return "(empty)";
+            if (text.Length <= maxChars)
+                return text;
+            return text.Substring(0, maxChars) + "…(truncated)";
         }
         public async Task<JsonResult> OnPostSendOTPAsync([FromBody] InputModel request)
         {
@@ -521,8 +601,35 @@ namespace Patientportal.Pages.Appointment
             string apiUrl = $"{baseUrl}/api/v1/Appointment/AddAppointmentbyPatientPortal";
              string apiUrl5 = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
 
+            if (!viewModel.AppointmentStartTime.HasValue)
+            {
+                return new JsonResult(new { isSuccess = false, errorMessage = "Appointment date and time is required." })
+                {
+                    StatusCode = 400
+                };
+            }
+
+            var appointmentStartLocal = viewModel.AppointmentStartTime.Value;
+            var formTypeTrimmed = viewModel.FormofAppointment?.Trim() ?? string.Empty;
+            const string onlineConsultation = "Dr. Sejal Online Consultation";
+            const string proceduresRequest = "Appointment Request for Procedures";
+            if (string.Equals(formTypeTrimmed, onlineConsultation, StringComparison.Ordinal)
+                || string.Equals(formTypeTrimmed, proceduresRequest, StringComparison.Ordinal))
+            {
+                var now = DateTime.Now;
+                if (appointmentStartLocal < now)
+                {
+                    return new JsonResult(new { isSuccess = false, errorMessage = "Appointment cannot be in the past." });
+                }
+
+                if (appointmentStartLocal < now.AddHours(1))
+                {
+                    return new JsonResult(new { isSuccess = false, errorMessage = "Appointment must be at least one hour from now." });
+                }
+            }
+
             Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl5, token) ?? new List<Holidays>();
-            var appointmentDate = viewModel.AppointmentStartTime.Value.ToString("dd/MM/yyyy");
+            var appointmentDate = appointmentStartLocal.ToString("dd/MM/yyyy", CultureInfo.InvariantCulture);
             var isHoliday = Holidays.Any(h => h.StartDate.HasValue &&
                                               h.StartDate.Value.ToString("dd/MM/yyyy") == appointmentDate);
 
@@ -530,17 +637,20 @@ namespace Patientportal.Pages.Appointment
             {
                 return new JsonResult(new { isSuccess = false, errorMessage = "Appointments cannot be scheduled on holidays." });
             }
-            var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
+            var (portalOk, portalResponse, portalStatus, portalRaw) =
+                await _apiService.PostAsyncWithStatus<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            if (response != null && response.IsSuccess)
+            if (portalOk && portalResponse != null && portalResponse.IsSuccess)
             {
                 return new JsonResult(new { isSuccess = true, message = "Your change request has been submitted." });
 
             }
-            else
-            {
-                return BadRequest("Failed to save patient details.");
-            }
+
+            var forwardedPortal = ApiService.TryForwardBadRequestJson(portalStatus, portalRaw);
+            if (forwardedPortal != null)
+                return forwardedPortal;
+
+            return BadRequest("Failed to save patient details.");
         }
 
         private async Task PopulatePortalBookingSubjectsAsync(string baseUrl, string token)

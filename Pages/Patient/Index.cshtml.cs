@@ -13,6 +13,7 @@ using Patientportal.Model;
 using Microsoft.AspNetCore.Authorization;
 using System.Diagnostics.Metrics;
 using System.Linq;
+using System.Globalization;
 using Patientportal;
 
 namespace Patientportal.Pages.Patient
@@ -156,10 +157,20 @@ namespace Patientportal.Pages.Patient
             var dedupBooked = DedupeAppointmentsById(allBooked);
             var dedupReq = DedupeAppointmentsById(allReq);
 
+            foreach (var r in dedupReq)
+                r.IsAppointmentRequest = true;
+
             NormalizePortalBookedAppointmentsForGrid(dedupBooked);
             NormalizePortalAppointmentRequestsForGrid(dedupReq);
 
             var sorted = dedupReq.Concat(dedupBooked).OrderByDescending(x => x.CreatedOn).ToList();
+            // Pending appointment requests often use LeadId while Id is 0; grid/JS need a non-zero Id for cancel/reschedule.
+            foreach (var item in sorted)
+            {
+                if (item.Id <= 0 && item.LeadId.HasValue && item.LeadId.Value > 0)
+                    item.Id = item.LeadId.Value;
+            }
+
             await EnrichBookedForPatientNamesAsync(portalProfileId, sorted);
             return sorted;
         }
@@ -420,9 +431,39 @@ namespace Patientportal.Pages.Patient
 
             // API Response Fetch karein
             var invoiceResponse = await _apiService.GetAsync<InvoiceResponse>(apiUrl4, token);
-            Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>();
+            var schedulerBlocksRaw = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>();
+            Doctorblocktime = schedulerBlocksRaw.Where(a => a.BlocksDoctorScheduleSlot()).ToList();
             Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl5, token) ?? new List<Holidays>();
             Leaves = await _apiService.GetAsync<List<Leave>>(apileavlist, token) ?? new List<Leave>();
+            var leavesDoctor1 = Leaves.Count(l => l.DoctorId == 1);
+            _logger.LogInformation(
+                "Patient page scheduler load: GetAppointmentsPortalByDoctor url={BlocksUrl} rawRowCount={RawCount} afterBlocksDoctorScheduleSlot={FilteredCount}; getHolidaysList count={HolidayCount}; getLeaveList total={LeaveCount} doctorId1={LeaveDoctor1Count}",
+                apiUrl3,
+                schedulerBlocksRaw.Count,
+                Doctorblocktime.Count,
+                Holidays.Count,
+                Leaves.Count,
+                leavesDoctor1);
+            if (Doctorblocktime.Count == 0 && schedulerBlocksRaw.Count > 0)
+            {
+                _logger.LogWarning(
+                    "Patient scheduler: API returned {RawCount} rows but none passed BlocksDoctorScheduleSlot() — UI may show no busy blocks.",
+                    schedulerBlocksRaw.Count);
+            }
+            else if (schedulerBlocksRaw.Count == 0)
+            {
+                _logger.LogWarning(
+                    "Patient scheduler: GetAppointmentsPortalByDoctor returned no rows for profileId={ProfileId}.",
+                    Id);
+            }
+
+            if (Leaves.Count > 0 && leavesDoctor1 == 0)
+            {
+                var sample = string.Join(", ", Leaves.Take(8).Select(l => l.DoctorId?.ToString() ?? "null"));
+                _logger.LogWarning(
+                    "Patient scheduler: no leave rows with DoctorId=1; sample DoctorId (first 8)=[{Sample}]",
+                    sample);
+            }
             CountryLists = await _apiService.GetAsync<List<Country>>(apiUrl6, token) ?? new List<Country>();
             Pincodes = await _apiService.GetAsync<List<Pincode>>(apiUrl7, token1) ?? new List<Pincode>();
             //if (Doctorblocktime != null && Doctorblocktime.Count > 0 )
@@ -530,8 +571,7 @@ namespace Patientportal.Pages.Patient
 
 
                 string apiUrl = $"{baseUrl}/api/Profile/Addpatientportalchanges";
-             
-                var apiHelper = new ApiService(_httpClient);
+
                 var response = await _apiService.PostAsync<ProfileListItem, ApiResponse>(apiUrl, viewModel, token);
 
                 if (response != null && response.IsSuccess)
@@ -553,25 +593,93 @@ namespace Patientportal.Pages.Patient
         {
             using var reader = new StreamReader(HttpContext.Request.Body);
             var json = await reader.ReadToEndAsync();
+
+            var isAppointmentRequest = false;
+            try
+            {
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("isAppointmentRequest", out var f))
+                    isAppointmentRequest = f.ValueKind == JsonValueKind.True;
+                else if (root.TryGetProperty("IsAppointmentRequest", out var f2))
+                    isAppointmentRequest = f2.ValueKind == JsonValueKind.True;
+            }
+            catch (System.Text.Json.JsonException)
+            {
+                // treat as booked appointment flow
+            }
+
             AppointmentListItem viewModel = JSON.Deserialize<AppointmentListItem>(json);
+            if (!isAppointmentRequest && viewModel.IsAppointmentRequest)
+                isAppointmentRequest = true;
 
-            string baseUrl = _configuration["ApiSettings:BaseUrl"];
+            string baseUrl = (_configuration["ApiSettings:BaseUrl"] ?? "").TrimEnd('/');
             string token = await _opsTokenService.GetTokenAsync();
-            string apiUrl = $"{baseUrl}/api/v1/Appointment/viewAppointmentButtonPatientPortal";
-          
-            var apiHelper = new ApiService(_httpClient);
-            var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            if (response != null && response.IsSuccess)
+            if (isAppointmentRequest)
+            {
+                var patientId = viewModel.PatientId ?? 0;
+                var appointmentRequestId = viewModel.Id;
+                if (patientId <= 0 || appointmentRequestId <= 0)
+                {
+                    return new JsonResult(new { isSuccess = false, message = "Invalid patient or appointment request." })
+                    {
+                        StatusCode = 400
+                    };
+                }
+
+                var isReschedule = viewModel.AppointmentStartTime.HasValue;
+                var actionBody = new PatientPortalAppointmentRequestActionBody
+                {
+                    PatientId = patientId,
+                    AppointmentRequestId = appointmentRequestId,
+                    Action = isReschedule ? "Reschedule" : "Cancel",
+                    AppointmentStartTime = isReschedule
+                        ? FormatIndiaStandardTimeOffsetIso(viewModel.AppointmentStartTime!.Value)
+                        : null
+                };
+
+                string requestActionUrl = $"{baseUrl}/api/v1/Appointment/patientPortal/appointmentRequest/action";
+                var (ok, errBody, status) = await _apiService.PostJsonAsync(requestActionUrl, actionBody, token);
+                if (ok)
+                {
+                    return new JsonResult(new { isSuccess = true, message = "Your change request has been submitted." });
+                }
+
+                var forwardedAction = ApiService.TryForwardBadRequestJson(status, errBody);
+                if (forwardedAction != null)
+                    return forwardedAction;
+
+                return new JsonResult(new { isSuccess = false, message = errBody ?? "Failed to update appointment request." })
+                {
+                    StatusCode = 502
+                };
+            }
+
+            string apiUrl = $"{baseUrl}/api/v1/Appointment/viewAppointmentButtonPatientPortal";
+            var (bookedOk, response, bookedStatus, bookedRaw) =
+                await _apiService.PostAsyncWithStatus<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
+
+            if (bookedOk && response != null && response.IsSuccess)
             {
                 return new JsonResult(new { isSuccess = true, message = "Your change request has been submitted." });
 
             }
-            else
-            {
-                return BadRequest("Failed to save patient details.");
-            }
-        } 
+
+            var forwardedBooked = ApiService.TryForwardBadRequestJson(bookedStatus, bookedRaw);
+            if (forwardedBooked != null)
+                return forwardedBooked;
+
+            return BadRequest("Failed to save patient details.");
+        }
+
+        /// <summary>Formats local wall-clock time as ISO-8601 with India Standard Time offset (+05:30), as required by the appointment-request action API.</summary>
+        private static string FormatIndiaStandardTimeOffsetIso(DateTime localUnspecified)
+        {
+            var offset = TimeSpan.FromHours(5) + TimeSpan.FromMinutes(30);
+            var dto = new DateTimeOffset(DateTime.SpecifyKind(localUnspecified, DateTimeKind.Unspecified), offset);
+            return dto.ToString("yyyy-MM-dd'T'HH:mm:sszzz", CultureInfo.InvariantCulture);
+        }
         public async Task<IActionResult> OnPostAddaptallAsync()
         {
             using var reader = new StreamReader(HttpContext.Request.Body);
@@ -583,18 +691,20 @@ namespace Patientportal.Pages.Patient
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/AddAppointmentbyportalAppointmentbyPatientId";
             
-            var apiHelper = new ApiService(_httpClient);
-            var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
+            var (addOk, addResponse, addStatus, addRaw) =
+                await _apiService.PostAsyncWithStatus<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            if (response != null && response.IsSuccess)
+            if (addOk && addResponse != null && addResponse.IsSuccess)
             {
                 return new JsonResult(new { isSuccess = true, message = "Your change request has been submitted." });
 
             }
-            else
-            {
-                return BadRequest("Failed to save patient details.");
-            }
+
+            var forwardedAdd = ApiService.TryForwardBadRequestJson(addStatus, addRaw);
+            if (forwardedAdd != null)
+                return forwardedAdd;
+
+            return BadRequest("Failed to save patient details.");
         }
         public async Task<IActionResult> OnPostAddAppointmentRequestAsync()
         {
@@ -632,18 +742,20 @@ namespace Patientportal.Pages.Patient
             {
                 return new JsonResult(new { isSuccess = false, errorMessage = "Appointments cannot be scheduled on leave." });
             }
-            var apiHelper = new ApiService(_httpClient);
-            var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
+            var (upsertOk, upsertResponse, upsertStatus, upsertRaw) =
+                await _apiService.PostAsyncWithStatus<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            if (response != null && response.IsSuccess)
+            if (upsertOk && upsertResponse != null && upsertResponse.IsSuccess)
             {
                 return new JsonResult(new { isSuccess = true, message = "Your change request has been submitted." });
 
             }
-            else
-            {
-                return BadRequest("Failed to save patient details.");
-            }
+
+            var forwardedUpsert = ApiService.TryForwardBadRequestJson(upsertStatus, upsertRaw);
+            if (forwardedUpsert != null)
+                return forwardedUpsert;
+
+            return BadRequest("Failed to save patient details.");
         }
 
     }

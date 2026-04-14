@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations.Schema;
+﻿using System;
+using System.ComponentModel.DataAnnotations.Schema;
+using Newtonsoft.Json;
 
 namespace Patientportal.Model
 {
@@ -65,5 +67,31 @@ namespace Patientportal.Model
         //public string? ModifiedByUserName { get; set; }
         public DateTimeOffset? CreatedOn { get; set; }
         public DateTimeOffset? ModifiedOn { get; set; }
+
+        /// <summary>True when this row is a pending appointment request (not a booked appointment).</summary>
+        [NotMapped]
+        [JsonProperty("isAppointmentRequest")]
+        public bool IsAppointmentRequest { get; set; }
+
+        /// <summary>
+        /// When false, the procedure slot must not appear as busy on the booking scheduler (e.g. cancelled).
+        /// Prefer excluding these rows in the API; the portal filters here so all consumers stay consistent.
+        /// </summary>
+        public bool BlocksDoctorScheduleSlot()
+        {
+            var name = StatusName?.Trim();
+            if (!string.IsNullOrEmpty(name))
+            {
+                if (name.Equals("Cancelled", StringComparison.OrdinalIgnoreCase)
+                    || name.Equals("Canceled", StringComparison.OrdinalIgnoreCase))
+                    return false;
+            }
+
+            // Portal cancel flow uses status id 79; keep if API sends id without a normalized name.
+            if (StatusId == 79)
+                return false;
+
+            return true;
+        }
     }
 }

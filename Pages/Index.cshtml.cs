@@ -233,7 +233,9 @@ namespace Patientportal.Pages
 
             // API Response Fetch karein
             var invoiceResponse = await _apiService.GetAsync<InvoiceResponse>(apiUrl4, token);
-            Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>();
+            Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>())
+                .Where(a => a.BlocksDoctorScheduleSlot())
+                .ToList();
             if (Doctorblocktime != null && Doctorblocktime.Count > 0)
             {
                 foreach (var appointment in Doctorblocktime)
@@ -280,8 +282,7 @@ namespace Patientportal.Pages
                 string token = await _opsTokenService.GetTokenAsync();
 
                 string apiUrl = $"{baseUrl}/api/Profile/Addpatientportalchanges";
-               
-                var apiHelper = new ApiService(_httpClient);
+
                 var response = await _apiService.PostAsync<ProfileListItem, ApiResponse>(apiUrl, viewModel, token);
 
                 if (response != null && response.IsSuccess)
@@ -308,19 +309,20 @@ namespace Patientportal.Pages
             string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/viewAppointmentButton";
-            
-            var apiHelper = new ApiService(_httpClient);
-            var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            if (response != null && response.IsSuccess)
-            {
-                return new JsonResult(new {  message = "Your change request has been submitted." });
+            var (ok, response, status, raw) =
+                await _apiService.PostAsyncWithStatus<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            }
-            else
+            if (ok && response != null && response.IsSuccess)
             {
-                return BadRequest("Failed to save patient details.");
+                return new JsonResult(new { message = "Your change request has been submitted." });
             }
+
+            var forwarded = ApiService.TryForwardBadRequestJson(status, raw);
+            if (forwarded != null)
+                return forwarded;
+
+            return BadRequest("Failed to save patient details.");
         } 
         public async Task<IActionResult> OnPostAddaptallAsync()
         {
@@ -332,8 +334,7 @@ namespace Patientportal.Pages
             string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/AddAppointmentbyportalAppointmentbyPatientId";
-           
-            var apiHelper = new ApiService(_httpClient);
+
             var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
             if (response != null && response.IsSuccess)
@@ -356,8 +357,7 @@ namespace Patientportal.Pages
             string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/UpsertAppointmentRequest";
-            
-            var apiHelper = new ApiService(_httpClient);
+
             var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
             if (response != null && response.IsSuccess)
