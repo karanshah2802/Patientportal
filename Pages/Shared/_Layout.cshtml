@@ -3,7 +3,10 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Patientportal</title>
+    @{
+        var layoutPageTitle = ViewData["Title"]?.ToString()?.Trim();
+    }
+    <title>@(string.IsNullOrEmpty(layoutPageTitle) ? "Inurskn - Patient Portal" : $"{layoutPageTitle} · Inurskn - Patient Portal")</title>
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/Patientportal.styles.css" asp-append-version="true" />
@@ -14,28 +17,24 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link href="https://cdn.syncfusion.com/ej2/22.1.34/ej2-icons/styles/bootstrap5.css" rel="stylesheet" />
     <link rel="stylesheet" href="https://cdn.syncfusion.com/ej2/material.css">
-    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="icon" href="~/favicon.png" type="image/png" asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/favicon.png" asp-append-version="true" />
     <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css" />
     <link rel="stylesheet" href="~/lib/sweetalert2/sweetalert2.min.css" />
     <link href="~/css/syncfusion/bootstrap5.css" rel="stylesheet" />
     <script src="https://cdn.syncfusion.com/ej2/28.2.3/dist/ej2.min.js"></script>
 </head>
 <body>
+    @* Single jQuery + Bootstrap; duplicate bundles register collapse handlers twice (open then immediate re-open). *@
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/js/bootstrap.bundle.min.js" asp-append-version="true"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="~/js/custom.js" asp-append-version="true"></script>
     <div class="">
         <main role="main" class="pb-3">
             @RenderBody()
         </main>
     </div>
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-
-    <script src="./js/jquery.min.js"></script>
-    <script src="./js/bootstrap.bundle.min.js"></script>
-    <script src="./js/custom.js"></script>
-
-
   @*   @await RenderSectionAsync("Scripts", required: false) *@
     <!-- Syncfusion ASP.NET Core Script Manager -->
     <ejs-scripts></ejs-scripts>

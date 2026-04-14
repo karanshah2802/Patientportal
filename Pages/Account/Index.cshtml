@@ -1,7 +1,7 @@
-﻿@page
+@page
 @model Patientportal.Pages.Account.IndexModel
 @{
-    ViewData["Title"] = "Login";
+    ViewData["Title"] = "Login/Register";
     Layout = "_LoginLayout";
 
 }
@@ -10,14 +10,14 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Patient Portal</title>
+    <title>Login · Inurskn - Patient Portal</title>
 
     <link rel="stylesheet" href="~/css/bootstrap.min.css">
     <link rel="stylesheet" href="~/css/custom.css">
     <link rel="stylesheet" href="~/css/responsive.css">
 
-    <link rel="shortcut icon" href="~/assets/favicon.ico" type="image/x-icon">
-    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="icon" href="~/favicon.png" type="image/png" asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/favicon.png" asp-append-version="true" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
 </head>
 <body>
@@ -33,7 +33,7 @@
                 <!-- <img src="./images/inurskin-login-art.svg" width="179" height="64" alt="Logo"> -->
                 <div class="login-box-head">
                     <img class="ius-logo" src="~/assets/inurskin-logo.svg" width="179" height="64" alt="Logo">
-                    <h1>Login</h1>
+                    <h1>Login/Register</h1>
                     <p class="text-rg text-16">Please fill your detail to access your account</p>
                 </div>
 
@@ -93,10 +93,6 @@
 
         </div>
     </div>
-
-    <script src="./js/jquery.min.js"></script>
-    <script src="./js/bootstrap.bundle.min.js"></script>
-    <script src="./js/custom.js"></script>
 
 </body>
 </html>
@@ -285,7 +281,7 @@
             data: JSON.stringify({ otp: otpCode, mobile: phoneNumber }),
             success: function (response) {
                 if (response.success) {
-                    window.location.href = "/Patient?id=" + response.patientId;
+                    window.location.href = response.redirectUrl || ("/Patient?id=" + response.patientId);
                 } else {
                     if (response.message !== null) {
 

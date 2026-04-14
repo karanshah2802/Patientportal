@@ -1,36 +1,50 @@
-﻿
-<header class="ius-header bg-white">
+@using System.Linq
+@using System.Security.Claims
+@{
+    // When false: logo only (e.g. anonymous public appointment). When null: show details (Patient page and other callers).
+    var showPatientHeaderDetails = ViewData["ShowHeaderPatientDetails"] as bool? != false;
+    var encryptedPatientIdForHome = User.Claims.FirstOrDefault(c => c.Type == PatientPortalClaimTypes.EncryptedPatientId)?.Value;
+}
+<header class="ius-header bg-white@(showPatientHeaderDetails ? "" : " ius-header--minimal")">
     <div class="hcol hcol-logo">
-        <a href="#" title="Inurskin" class="no-click"><img src="~/assets/inurskin-logo.svg" width="112" height="41" alt="Inurskin Logo"></a>
+        @if (!string.IsNullOrEmpty(encryptedPatientIdForHome))
+        {
+            <a asp-page="/Patient/Index" asp-route-id="@encryptedPatientIdForHome" title="Patient Portal"><img src="~/assets/inurskin-logo.svg" width="112" height="41" alt="Inurskin Logo"></a>
+        }
+        else
+        {
+            <a href="#" title="Inurskin" class="no-click"><img src="~/assets/inurskin-logo.svg" width="112" height="41" alt="Inurskin Logo"></a>
+        }
     </div>
-    <div class="hcol hcol-pa text-bd text-12">
-        <div class="pa-row">
-            <div class="pa-label">Patient Id</div>
-            <div class="pa-amt">@ViewData["ProfileId"]</div>
+    @if (showPatientHeaderDetails)
+    {
+        <div class="hcol hcol-pa text-bd text-12">
+            <div class="pa-row">
+                <div class="pa-label">Patient Id</div>
+                <div class="pa-amt">@ViewData["ProfileId"]</div>
+            </div>
         </div>
-    </div>
-    <div class="hcol hcol-usr text-bd text-12 dropdown">
-        <button type="button" class="dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
-            <div class="ius-userp">
-                <img src="~/assets/user-pic.svg" width="36" height="36" alt="John Doe">
-            </div>
-            <div class="ius-useri  d-sm-block">
-                <div class="text-md">Welcome</div>
-                <div id="ius_head_user" class="text-14" title="@ViewData["PatientName"]">
-                    @{
-                        var patientName = ViewData["PatientName"]?.ToString();
-                        var displayName = patientName != null && patientName.Length > 10
-                        ? patientName.Substring(0, 10) + "..."
-                        : patientName;
-                    }
-                    @displayName
+        <div class="hcol hcol-usr text-bd text-12 dropdown">
+            <button type="button" class="dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">
+                <div class="ius-userp">
+                    <img src="~/assets/user-pic.svg" width="36" height="36" alt="">
                 </div>
-
-
-            </div>
-        </button>
-        <ul class="dropdown-menu">
-           <li><a class="dropdown-item" href="/Account" id="logoutBtn">Logout</a></li>
-        </ul>
-    </div>
+                <div class="ius-useri  d-sm-block">
+                    <div class="text-md">Welcome</div>
+                    <div id="ius_head_user" class="text-14" title="@ViewData["PatientName"]">
+                        @{
+                            var patientName = ViewData["PatientName"]?.ToString();
+                            var displayName = patientName != null && patientName.Length > 10
+                            ? patientName.Substring(0, 10) + "..."
+                            : patientName;
+                        }
+                        @displayName
+                    </div>
+                </div>
+            </button>
+            <ul class="dropdown-menu">
+               <li><a class="dropdown-item" asp-page="/Account/Index" asp-page-handler="Logout" id="logoutBtn">Logout</a></li>
+            </ul>
+        </div>
+    }
 </header>

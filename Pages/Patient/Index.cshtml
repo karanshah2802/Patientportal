@@ -1,10 +1,16 @@
 @page
 @model Patientportal.Pages.Patient.IndexModel
+@using System.Globalization
+@using System.Text.Json
+@using Patientportal.Model
 @{
     ViewData["Title"] = "Patient Portal";
     Layout = "_LayoutMain";
 }
 @{
+
+    var appointmentSlotScheduleInitialData = new List<AppointmentListItem>();
+    var patientRescheduleScheduleInitialData = new List<AppointmentListItem>();
 
     List<object> toolbarItems = new List<object>();
     toolbarItems.Add("Search");
@@ -18,6 +24,18 @@
     {
         pendingBalance = value;
     }
+
+    var portalDepsProfileIdStr = Model.LoggedInProfileId > 0
+        ? Model.LoggedInProfileId.ToString(CultureInfo.InvariantCulture)
+        : "0";
+    var portalDependentsDmUrl = Model.ShowPortalDependentSection
+        ? $"/Appointment/Index?handler=PortalDependents&profileId={portalDepsProfileIdStr}"
+        : "";
+    var portalDependentsDmUrlJson = JsonSerializer.Serialize(portalDependentsDmUrl);
+    var portalDependentsCardUrl = Model.ShowPortalDependentSection
+        ? $"/Appointment/Index?handler=PortalDependentsCard&profileId={portalDepsProfileIdStr}"
+        : "";
+    var portalDependentsCardUrlJson = JsonSerializer.Serialize(portalDependentsCardUrl);
 }
 @Html.AntiForgeryToken()
 <!DOCTYPE html>
@@ -25,15 +43,161 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Patient Portal</title>
+    <title>Patient Portal · Inurskn - Patient Portal</title>
 
     <link rel="stylesheet" href="~/css/bootstrap.min.css">
     <link rel="stylesheet" href="~/css/custom.css">
     <link rel="stylesheet" href="~/css/responsive.css">
+    <link rel="stylesheet" href="~/lib/font-awesome/css/all.min.css" />
 
-    <link rel="shortcut icon" href="./favicon.ico" type="image/x-icon">
-    <link rel="icon" href="./favicon.ico" type="image/x-icon">
+    <link rel="icon" href="~/favicon.png" type="image/png" asp-append-version="true" />
+    <link rel="apple-touch-icon" href="~/favicon.png" asp-append-version="true" />
     <link href="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.css" rel="stylesheet">
+
+    <style>
+        /* Same date/time row + slot modal layout as /Appointment */
+        .datetimepicker-container.appointment-portal-dtp {
+            position: relative;
+            display: block;
+            width: 100%;
+            min-height: 45px;
+            border-bottom: 1px solid #ced4da;
+            padding-bottom: 4px;
+        }
+        .datetimepicker-container.appointment-portal-dtp .appointment-dtp-ejs,
+        .datetimepicker-container.appointment-portal-dtp #pi-resched {
+            width: 100% !important;
+            max-width: 100%;
+            display: block !important;
+        }
+        .datetimepicker-container.appointment-portal-dtp .e-datetime-wrapper,
+        .datetimepicker-container.appointment-portal-dtp .e-float-input.e-input-group,
+        .datetimepicker-container.appointment-portal-dtp .e-input-group.e-control-wrapper,
+        .datetimepicker-container.appointment-portal-dtp .e-input-group {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
+            align-items: center !important;
+            gap: 0 !important;
+            border: none !important;
+            border-radius: 0 !important;
+            background: transparent !important;
+            box-shadow: none !important;
+            width: 100% !important;
+        }
+        .datetimepicker-container.appointment-portal-dtp .e-input-group .e-input:not(textarea) {
+            flex: 1 1 0% !important;
+            min-width: 0 !important;
+            height: 45px !important;
+            line-height: 43px !important;
+            padding-left: 0.5rem !important;
+            padding-right: 6.25rem !important;
+            box-sizing: border-box !important;
+        }
+        .datetimepicker-container.appointment-portal-dtp .e-input-group .e-input-group-icon {
+            flex-shrink: 0 !important;
+            width: 30px !important;
+            min-width: 30px !important;
+            height: 45px !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .appointment-portal-dtp .scheduler-icon {
+            position: absolute !important;
+            right: 62px;
+            top: 0;
+            height: 45px !important;
+            width: 30px !important;
+            cursor: pointer;
+            z-index: 11;
+            background: none !important;
+            border: none !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .appointment-portal-dtp .scheduler-icon:hover i { color: #0061AB; }
+        .appointment-portal-dtp .scheduler-icon i { font-size: 1.1rem; color: #495057; }
+
+        #appointmentSlotModal .modal-dialog.modal-fullscreen {
+            height: 100vh;
+            max-height: 100vh;
+        }
+        #appointmentSlotModal .modal-content {
+            min-height: 100vh;
+            height: 100%;
+            border-radius: 0;
+            border: none;
+        }
+        #appointmentSlotModal .modal-header { flex-shrink: 0; }
+        #appointmentSlotModal .modal-body {
+            flex: 1 1 auto;
+            min-height: 0;
+            overflow: hidden;
+        }
+        .appointment-schedule-modal-wrap {
+            height: calc(100vh - 56px);
+            min-height: calc(100vh - 56px);
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .appointment-schedule-modal-wrap .schedule-wrapper-modal {
+            flex: 1 1 auto;
+            min-height: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .appointment-schedule-modal-wrap .e-schedule {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .blocked-slot {
+            background-color: #7AB6E0;
+            color: #fff;
+            text-align: center;
+            font-weight: 600;
+            padding: 5px 6px;
+            border-radius: 4px;
+            box-sizing: border-box;
+            min-height: 100%;
+            width: 100%;
+            line-height: 1.25;
+        }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .e-schedule .e-hide-childs > * {
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: stretch !important;
+            min-height: 100% !important;
+            height: 100% !important;
+        }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .e-appointment.e-read-only {
+            background: #7AB6E0 !important;
+        }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .doctor-leave-cell {
+            background: linear-gradient(180deg, #f4f6f8 0%, #e9ecef 45%, #e3e7eb 100%) !important;
+            color: #495057 !important;
+            pointer-events: none;
+            opacity: 1 !important;
+            box-shadow: inset 0 0 0 1px rgba(0, 97, 171, 0.06);
+        }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .holiday-cell {
+            background: linear-gradient(180deg, #eceef1 0%, #dee2e6 50%, #d8dce0 100%) !important;
+            color: #495057 !important;
+            pointer-events: none;
+            opacity: 1 !important;
+            box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+        }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .e-quick-popup-wrapper.e-lib.e-popup.e-control.e-popup-open {
+            display: none;
+        }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .e-current-time { display: none; }
+        #appointmentSlotModal .appointment-schedule-modal-wrap .e-header-cells { pointer-events: none; }
+    </style>
 
 </head>
 <body>
@@ -41,39 +205,19 @@
         <div class="container container-x">
             <h1 class="page-title text-28">Patient Portal</h1>
             <div class="ius-block ius-card ius-appdata">
-                <div class="ius-block-head">
-                    <h2>Appointment Information</h2>
-
+                <div class="ius-block-head ius-appointment-card-head">
                     <div class="ius-grid-filters">
-                        <div class="dropdown">
-                            <a class="" href="#" data-bs-toggle="dropdown" title="Book Appointment">
-                                Book Appointment
-                            </a>
-                            <ul class="dropdown-menu">
-                                <li>
-                                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#schedulerModal2">
-                                        Dr. Sejal In-person Consultation
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#oConsultationModal">
-                                        Dr. Sejal Online Consultation
-                                    </a>
-                                </li>
-                                <li>
-                                    <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#cosmeticProcModel">
-                                        Appointment Request for Procedures
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
+                        <a class="ius-btn-book-appointment" href="@Url.Page("/Appointment/Index", null, new { fromPatient = "1" })" title="Book appointment">
+                            <span>Book appointment</span>
+                            <i class="fas fa-arrow-right" aria-hidden="true"></i>
+                        </a>
                     </div>
 
                 </div>
 
                 <!-- Only for desktop : Syncfusion -->
                 <div class="ius-table d-none d-lg-block table-responsive">
-                    <ejs-grid id="GridAppointments"
+                    <ejs-grid id="GridPatientAppointments"
                               allowResizing="true"
                               allowExcelExport="true"
                               allowFiltering="false"
@@ -82,7 +226,7 @@
                               allowSelection="true"
                               allowReordering="true"
                               enableHeaderFocus="true"
-                              enablePersistence="true"
+                              enablePersistence="false"
                               enableHover="true"
                               autoFit="true"
                               height="200"
@@ -94,7 +238,7 @@
 
                         <e-data-manager url="/Patient/Index?handler=AppointmentView&Id=@Model.Id" adaptor="UrlAdaptor" crossDomain="true"></e-data-manager>
 
-                        <e-grid-searchsettings fields="@(new string[] {"AppoinmentType","DoctorName","AppointmentStartTime","StatusName"})"></e-grid-searchsettings>
+                        <e-grid-searchsettings fields="@(new string[] {"bookedForPatientName","appoinmentType","doctorName","appointmentStartTime","statusName"})"></e-grid-searchsettings>
 
                         <e-grid-filtersettings type="Excel"></e-grid-filtersettings>
                         <e-grid-loadingIndicator indicatorType="Shimmer"></e-grid-loadingIndicator>
@@ -104,20 +248,21 @@
                         <e-grid-columns>
 
                             <e-grid-column headerText="Actions" width="120" textAlign="Center" template="#actionTemplate"></e-grid-column>
-                            <e-grid-column field="Id" headerText="Id" width="200" visible="false"></e-grid-column>
-                            <e-grid-column field="AppoinmentType" headerText="Type of Appointment" width="200"></e-grid-column>
-                            <e-grid-column field="DoctorName" headerText="Appointment With" width="200"></e-grid-column>
-                            <e-grid-column field="AppointmentStartTime" headerText="Appointment Date Time" format="@Model.EjsDateTimePattern" type="dateTime" width="200"></e-grid-column>
-                            <e-grid-column field="StatusName" headerText="Status" width="150"></e-grid-column>
+                            <e-grid-column field="id" headerText="Id" width="200" visible="false" isPrimaryKey="true"></e-grid-column>
+                            <e-grid-column field="appoinmentType" headerText="Type of Appointment" width="200"></e-grid-column>
+                            <e-grid-column field="bookedForPatientName" headerText="Appointment for" width="180"></e-grid-column>
+                            <e-grid-column field="doctorName" headerText="Appointment With" width="200"></e-grid-column>
+                            <e-grid-column field="appointmentStartTime" headerText="Appointment Date Time" format="@Model.EjsDateTimePattern" type="dateTime" width="200"></e-grid-column>
+                            <e-grid-column field="statusName" headerText="Status" width="150"></e-grid-column>
                         </e-grid-columns>
                     </ejs-grid>
                     <script id="actionTemplate" type="text/x-template">
-                        ${if(statusName !== "Cancelled"  && statusName !== "Walked-Out" && statusName !== "Checked-In" && statusName !== "Completed" && appoinmentType !== "Appointment Request for Online Consultation" && appoinmentType !== "Dr. Sejal Online Consultation" && appoinmentType !== "Appointment Request for Procedures")}
-                                                <a href="#schedulerModal"
+                        ${if(statusName !== "Cancelled"  && statusName !== "Walked-Out" && statusName !== "Checked-In" && statusName !== "Completed" && statusName !== "Converted to Appt." && statusName !== "Request Rejected" && appoinmentType !== "Appointment Request for Online Consultation" && appoinmentType !== "Dr. Sejal Online Consultation" && appoinmentType !== "Appointment Request for Procedures")}
+                                                <a href="#appointmentSlotModal"
                            class="app-resched"
                            title="Reschedule"
                            data-bs-toggle="modal"
-                           data-bs-target="#schedulerModal"
+                           data-bs-target="#appointmentSlotModal"
                            data-starttime="${appointmentStartTime}">
                             <img loading="lazy" src="@Url.Content("~/assets/calendar.svg")" width="18" height="20" alt="Calendar">
                         </a>
@@ -143,22 +288,23 @@
                 </div>
 
             }
-            <div class="ius-block ius-card ius-notes">
-                <h2 class="mb-2 pb-1 text--red">Note</h2>
-                <ol>
-                    @* <li>Appointment  will be booked for consultation with Dr. Sejal Saheta.</li> *@
-                    <li>In case a calendar slot is not available as per your convinence please call <a href="tel:+91-9819286930" title="91-9819286930">+91 9819286930</a> / <a href="tel:+91-9326028277" title="91-9326028277">+91 9326028277</a></li>
-                </ol>
-            </div>
-            <div class="ius-block ius-card">
-                <div class="ius-block ius-card d-flex">
-                    <h2>Patient Information</h2>
-                    <!-- Edit icon ke liye -->
-                    <a href="#" id="edit-icon" title="Edit Patient Info" style="font-size: 18px; margin-left: 10px;">
-                        <i class="fa fa-pencil"></i> <!-- FontAwesome pencil icon -->
+            <div class="ius-block ius-card patient-info-card">
+                <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 patient-info-card-head">
+                    <button class="btn btn-link text-dark text-decoration-none d-flex align-items-center p-0 flex-grow-1 text-start patient-info-collapse-toggle collapsed"
+                            type="button"
+                            data-bs-toggle="collapse"
+                            data-bs-target="#patientInfoCollapse"
+                            aria-expanded="false"
+                            aria-controls="patientInfoCollapse">
+                        <i class="fas fa-chevron-down patient-info-chevron me-2" aria-hidden="true"></i>
+                        <span class="h2 mb-0">Patient Information</span>
+                    </button>
+                    <a href="#" id="edit-icon" title="Edit Patient Info" class="text-dark flex-shrink-0" style="font-size: 18px;">
+                        <i class="fa fa-pencil" aria-hidden="true"></i>
                     </a>
                 </div>
 
+                <div class="collapse" id="patientInfoCollapse">
                 <form class="ius-form" action="#" method="POST">
                     <input type="hidden" id="PatientId" asp-for="PatientData.Id" name="medicalPatientSignature" class="custom-field-height" />
                     <div class="row">
@@ -651,7 +797,142 @@
                         </div>
                     </div>
                 </form>
+                </div>
             </div>
+
+            @if (Model.ShowPortalDependentSection)
+            {
+                <div class="ius-block ius-card patient-info-card">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 patient-info-card-head">
+                        <button class="btn btn-link text-dark text-decoration-none d-flex align-items-center p-0 flex-grow-1 text-start patient-info-collapse-toggle collapsed"
+                                type="button"
+                                data-bs-toggle="collapse"
+                                data-bs-target="#patientDependentsCollapse"
+                                aria-expanded="false"
+                                aria-controls="patientDependentsCollapse">
+                            <i class="fas fa-chevron-down patient-info-chevron me-2" aria-hidden="true"></i>
+                            <span class="h2 mb-0">Dependents</span>
+                        </button>
+                    </div>
+                    <div class="collapse" id="patientDependentsCollapse">
+                        <div class="portal-dependent-toolbar d-flex flex-wrap align-items-center gap-2 px-1 pb-2 pt-1">
+                            <button type="button" class="bttn bttn-primary mb-0" id="open-dependent-details-btn" data-bs-toggle="modal" data-bs-target="#addDependentAppointmentModal">Add Dependent Patient</button>
+                        </div>
+                        @if (Model.LoggedInProfileId > 0)
+                        {
+                            <div class="ius-table d-none d-lg-block table-responsive border rounded p-2 bg-white mx-1 mb-2">
+                                <ejs-grid id="GridPortalDependents"
+                                          allowResizing="true"
+                                          allowPaging="true"
+                                          allowSorting="false"
+                                          allowFiltering="false"
+                                          allowSelection="true"
+                                          enableHeaderFocus="true"
+                                          enableHover="true"
+                                          autoFit="true"
+                                          height="280"
+                                          rowHeight="38"
+                                          recordDoubleClick="onPortalDependentRecordDoubleClick"
+                                          created="onPortalDependentsGridCreated"
+                                          dataBound="onPortalDependentsDataBound">
+                                    <e-data-manager url="@portalDependentsDmUrl" adaptor="UrlAdaptor" crossDomain="true"></e-data-manager>
+                                    <e-grid-loadingIndicator indicatorType="Shimmer"></e-grid-loadingIndicator>
+                                    <e-grid-pagesettings pageCount="10" pageSize="10" pageSizes="@(new string[] { "10", "15", "25", "50" })"></e-grid-pagesettings>
+                                    <e-grid-selectionsettings type="Single"></e-grid-selectionsettings>
+                                    <e-grid-columns>
+                                        <e-grid-column field="id" headerText="Profile ID" width="100" isPrimaryKey="true" visible="false"></e-grid-column>
+                                        <e-grid-column field="name" headerText="Name" width="180" minWidth="120"></e-grid-column>
+                                        <e-grid-column field="age" headerText="Age" width="80"></e-grid-column>
+                                        <e-grid-column field="gender" headerText="Gender" width="100"></e-grid-column>
+                                        <e-grid-column field="patientRelationshipName" headerText="Relation" width="160" minWidth="100"></e-grid-column>
+                                        <e-grid-column headerText="Actions" width="130" minWidth="120" textAlign="Center" template="#portalDependentEditBtnTemplatePatient"></e-grid-column>
+                                    </e-grid-columns>
+                                </ejs-grid>
+                                <script id="portalDependentEditBtnTemplatePatient" type="text/x-template">
+                                    <button type="button" class="bttn bttn-primary-outline btn-sm py-0 px-2 portal-dep-edit-btn" aria-label="Edit dependent">Edit</button>
+                                </script>
+                            </div>
+                            <div class="ius-grid d-lg-none text-14 border rounded p-2 bg-white mt-2 mx-1 mb-2" id="portal-dependents-container" aria-live="polite"></div>
+                        }
+                    </div>
+                </div>
+            }
+
+            <div class="ius-block ius-card ius-notes">
+                <h2 class="mb-2 pb-1 text--red">Note</h2>
+                <ol>
+                    @* <li>Appointment  will be booked for consultation with Dr. Sejal Saheta.</li> *@
+                    <li>In case a calendar slot is not available as per your convinence please call <a href="tel:+91-9819286930" title="91-9819286930">+91 9819286930</a> / <a href="tel:+91-9326028277" title="91-9326028277">+91 9326028277</a></li>
+                </ol>
+            </div>
+
+            @if (Model.ShowPortalDependentSection)
+            {
+                <div class="modal fade" id="addDependentAppointmentModal" tabindex="-1" aria-labelledby="addDependentAppointmentModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="addDependentAppointmentModalLabel">Add Dependent Patient</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <input type="hidden" id="dep-modal-editing-profile-id" value="" autocomplete="off" />
+                                <div class="row g-4">
+                                    <div class="col-md-6">
+                                        <label for="dep-modal-name" class="form-label">Name<span class="text-danger">*</span></label>
+                                        <input type="text" name="dependent_modal_name" maxlength="100" class="form-control dependent-modal-text" id="dep-modal-name" value="" autocomplete="name" />
+                                        <span id="dep-modal-namespan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label for="dep-modal-age" class="form-label">Age<span class="text-danger">*</span></label>
+                                        <input type="text" name="dependent_modal_age" class="form-control dependent-modal-text" id="dep-modal-age" oninput="validateAge(this)" value="" inputmode="numeric" maxlength="2" />
+                                        <span id="dep-modal-agespan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="dep-modal-gender">Gender<span class="text-danger">*</span></label>
+                                        <ejs-dropdownlist id="dep-modal-gender"
+                                                          cssClass="dependent-modal-ddl form-control"
+                                                          style="height: 45px;"
+                                                          placeholder="Select gender"
+                                                          dataSource="@Model.DependentGenderOptions"
+                                                          popupHeight="220px"
+                                                          showClearButton="false">
+                                        </ejs-dropdownlist>
+                                        <span id="dep-modal-genderspan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <label class="form-label" for="dep-modal-relation">Relation to primary patient<span class="text-danger">*</span></label>
+                                        <ejs-dropdownlist id="dep-modal-relation"
+                                                          cssClass="dependent-modal-ddl form-control"
+                                                          style="height: 45px;"
+                                                          TValue="long?"
+                                                          placeholder="Select relation"
+                                                          dataSource="@Model.PatientRelationshipOptions"
+                                                          popupHeight="280px"
+                                                          showClearButton="true"
+                                                          allowFiltering="true"
+                                                          filterBarPlaceholder="Search">
+                                            <e-dropdownlist-fields text="Name" value="Id"></e-dropdownlist-fields>
+                                        </ejs-dropdownlist>
+                                        <span id="dep-modal-relationspan" class="text-danger small d-block mt-1"></span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer flex-nowrap justify-content-end">
+                                <button type="button" class="bttn bttn-primary-outline" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="bttn bttn-primary" id="dependent-modal-done-btn" title="Save">Save</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <script>
+                    window.__portalDependentsDmUrl = @Html.Raw(portalDependentsDmUrlJson);
+                    window.__portalDependentsCardUrl = @Html.Raw(portalDependentsCardUrlJson);
+                    window.__portalParentProfileId = "@Model.LoggedInProfileId.ToString(CultureInfo.InvariantCulture)";
+                </script>
+            }
+
             <script>
                 document.addEventListener("DOMContentLoaded", function () {
                     const countryValuee = "@Model.PatientData.Country";
@@ -754,6 +1035,24 @@
 
 
             <script>
+                function portalSetRowContextFromRowData(rowData) {
+                    var hidReq = document.getElementById("PortalRowIsAppointmentRequest");
+                    var hidPid = document.getElementById("PortalRowPatientId");
+                    if (!hidReq || !hidPid || !rowData) return;
+                    var isReq = rowData.isAppointmentRequest === true || rowData.isAppointmentRequest === "true";
+                    hidReq.value = isReq ? "true" : "false";
+                    var pid = rowData.patientId != null && rowData.patientId !== "" ? rowData.patientId : rowData.PatientId;
+                    hidPid.value = (pid !== undefined && pid !== null && pid !== "") ? String(pid) : "";
+                }
+                function portalSetRowContextFromCard(card) {
+                    var hidReq = document.getElementById("PortalRowIsAppointmentRequest");
+                    var hidPid = document.getElementById("PortalRowPatientId");
+                    if (!hidReq || !hidPid || !card) return;
+                    var inpReq = card.querySelector("input[name='portalIsAppointmentRequest']");
+                    var inpPid = card.querySelector("input[name='portalPatientId']");
+                    hidReq.value = (inpReq && inpReq.value === "true") ? "true" : "false";
+                    hidPid.value = (inpPid && inpPid.value) ? inpPid.value : "";
+                }
                 document.addEventListener("DOMContentLoaded", function () {
                     // Event delegation for dynamically generated elements
                     document.body.addEventListener("click", function (event) {
@@ -765,20 +1064,23 @@
 
                             // Check if clicked inside the grid or a dynamically generated card
                             let row = rescheduleBtn.closest("tr");
-                            if (row && document.getElementById("GridAppointments")) {
-                                let grid = document.getElementById("GridAppointments").ej2_instances[0];
+                            if (row && document.getElementById("GridPatientAppointments")) {
+                                let grid = document.getElementById("GridPatientAppointments").ej2_instances[0];
                                 let rowData = grid.getRowInfo(row).rowData;
-                                appointmentId = rowData.id;
+                                appointmentId = rowData.id ?? rowData.Id;
+                                portalSetRowContextFromRowData(rowData);
                             } else {
                                 // Handle dynamically generated card
                                 let card = rescheduleBtn.closest(".ius-gridrow");
                                 if (card) {
                                     appointmentId = card.querySelector("input[name='appointmentId']").value;
+                                    portalSetRowContextFromCard(card);
                                 }
                             }
 
                             // Set the appointmentId value in the hidden field inside the Reschedule Modal
-                            if (appointmentId) {
+                            // Do not use truthiness: API may send Id 0 before server maps LeadId; 0 is valid only after mapping.
+                            if (appointmentId !== undefined && appointmentId !== null && appointmentId !== "") {
                                 document.getElementById("AppoinmentId").value = appointmentId;
                             }
                         }
@@ -788,20 +1090,22 @@
 
                             // Check if clicked inside the grid or a dynamically generated card
                             let row = cancelBtn.closest("tr");
-                            if (row && document.getElementById("GridAppointments")) {
-                                let grid = document.getElementById("GridAppointments").ej2_instances[0];
+                            if (row && document.getElementById("GridPatientAppointments")) {
+                                let grid = document.getElementById("GridPatientAppointments").ej2_instances[0];
                                 let rowData = grid.getRowInfo(row).rowData;
-                                appointmentId = rowData.id;
+                                appointmentId = rowData.id ?? rowData.Id;
+                                portalSetRowContextFromRowData(rowData);
                             } else {
                                 // Handle dynamically generated card
                                 let card = cancelBtn.closest(".ius-gridrow");
                                 if (card) {
                                     appointmentId = card.querySelector("input[name='appointmentId']").value;
+                                    portalSetRowContextFromCard(card);
                                 }
                             }
 
                             // Set the appointmentId value in the hidden field inside the Cancel Modal
-                            if (appointmentId) {
+                            if (appointmentId !== undefined && appointmentId !== null && appointmentId !== "") {
                                 document.getElementById("CancelPatientId").value = appointmentId;
                             }
                         }
@@ -861,13 +1165,16 @@
 
             <script>
                 function onQueryCellInfo(args) {
-                    if (args.column.field === "StatusName") {
+                    var statusField = args.column.field;
+                    if (statusField === "statusName" || statusField === "StatusName") {
                         if (args.data.statusName === "Booked") {
                             args.cell.innerHTML = `<span class="badge badge-success">Booked</span>`;
                         } else if (args.data.statusName === "Completed") {
                             args.cell.innerHTML = `<span class="badge badge-Primary">Completed</span>`;
-                        } else if (args.data.statusName === "Converted To Appointment") {
-                            args.cell.innerHTML = `<span class="badge badge-Primary">Completed</span>`;
+                        } else if (args.data.statusName === "Converted to Appt." || args.data.statusName === "Converted To Appointment") {
+                            args.cell.innerHTML = `<span class="badge badge-Primary">Converted to Appt.</span>`;
+                        } else if (args.data.statusName === "Request Rejected") {
+                            args.cell.innerHTML = `<span class="badge badge-danger">Request Rejected</span>`;
                         }
                         else if (args.data.statusName === "Request Sent") {
                             args.cell.innerHTML = `<span class="badge badge-secondary">Request Sent</span>`;
@@ -889,100 +1196,12 @@
                 }
 
             </script>
-            <!-- Only for mobile : Syncfusion -->
-            <div class="ius-grid d-lg-none text-14" id="appointments-container">
-                <div class="ius-gridrow">
-                    <div class="ius-appbody">
-                        <div class="ius-appinfo">
-                            <h3>Dr. Sejal Saheta</h3>
-                            <div class="ius-apptyfo">
-                                <span class="appinfo-type">Consultation</span>
-                                <span class="appinfo-dot"></span>
-                                <span class="appinfo-form">Inclinic</span>
-                            </div>
-                        </div>
-                        <div class="ius-ctrls">
-                            <a href="#app-resched" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#app-resched">
-                                <img loading="lazy" src="~/assets/calendar.svg" width="18" height="20" alt="Calendar">
-                            </a>
-                            <a href="#app-cancel" title="Cancel" data-bs-toggle="modal" data-bs-target="#app-cancel">
-                                <img loading="lazy" src="~/assets/delete.svg" width="18" height="20" alt="Cancel">
-                            </a>
-                        </div>
-                    </div>
-                    <div class="ius-foo">
-                        <div class="ius-datetime">
-                            <div class="datetime-label text-sb">Date & Time</div>
-                            <div>1/3/2025 12:10:00</div>
-                        </div>
-
-                        <div class="ius-status">
-                            <div class="ius-badge">Reschedule</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ius-gridrow">
-                    <div class="ius-appbody">
-                        <div class="ius-appinfo">
-                            <h3>Dr. Sejal Saheta</h3>
-                            <div class="ius-apptyfo">
-                                <span class="appinfo-type">Consultation</span>
-                                <span class="appinfo-dot"></span>
-                                <span class="appinfo-form">Inclinic</span>
-                            </div>
-                        </div>
-                        <div class="ius-ctrls">
-                            <a href="#app-resched" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#app-resched">
-                                <img loading="lazy" src="~/assets/calendar.svg" width="18" height="20" alt="Calendar">
-                            </a>
-                            <a href="#app-cancel" title="Cancel" data-bs-toggle="modal" data-bs-target="#app-cancel">
-                                <img loading="lazy" src="~/assets/delete.svg" width="18" height="20" alt="Cancel">
-                            </a>
-                        </div>
-                    </div>
-                    <div class="ius-foo">
-                        <div class="ius-datetime">
-                            <div class="datetime-label text-sb">Date & Time</div>
-                            <div>1/3/2025 12:10:00</div>
-                        </div>
-
-                        <div class="ius-status">
-                            <div class="ius-badge badge-green">Booked</div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="ius-gridrow">
-                    <div class="ius-appbody">
-                        <div class="ius-appinfo">
-                            <h3>Dr. Sejal Saheta</h3>
-                            <div class="ius-apptyfo">
-                                <span class="appinfo-type">Consultation</span>
-                                <span class="appinfo-dot"></span>
-                                <span class="appinfo-form">Inclinic</span>
-                            </div>
-                        </div>
-                        <div class="ius-ctrls">
-                            <a href="#app-resched" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#app-resched">
-                                <img loading="lazy" src="~/assets/calendar.svg" width="18" height="20" alt="Calendar">
-                            </a>
-                            <a href="#app-cancel" title="Cancel" data-bs-toggle="modal" data-bs-target="#app-cancel">
-                                <img loading="lazy" src="~/assets/delete.svg" width="18" height="20" alt="Cancel">
-                            </a>
-                        </div>
-                    </div>
-                    <div class="ius-foo">
-                        <div class="ius-datetime">
-                            <div class="datetime-label text-sb">Date & Time</div>
-                            <div>1/3/2025 12:10:00</div>
-                        </div>
-
-                        <div class="ius-status">
-                            <div class="ius-badge badge-red">Cancelled</div>
-                        </div>
-                    </div>
-                </div>
+            <!-- Only for mobile: card list with server-side pagination (matches desktop grid page size) -->
+            <div class="ius-grid d-lg-none text-14" id="appointments-container"></div>
+            <div class="ius-appointments-pager d-none d-flex d-lg-none flex-wrap justify-content-between align-items-center gap-2 mt-3 px-1 py-2" id="appointments-pager">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="appt-pager-prev" aria-label="Previous page">Previous</button>
+                <span class="text-12 text-muted flex-grow-1 text-center" id="appt-pager-info"></span>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="appt-pager-next" aria-label="Next page">Next</button>
             </div>
         </div>
         </div>
@@ -996,6 +1215,8 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <input type="hidden" id="CancelPatientId" name="medicalPatientSignature" class="custom-field-height" />
+                <input type="hidden" id="PortalRowIsAppointmentRequest" value="false" />
+                <input type="hidden" id="PortalRowPatientId" value="" />
                 <input type="hidden" id="StatusIds" value="79" class="custom-field-height" />
                 <div class="modal-body">
                     <div class="">
@@ -1012,11 +1233,167 @@
     </div>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
     <script>
+        (function (w) {
+            function portalAppointmentParseJsonBody(xhr) {
+                var txt = xhr.responseText;
+                if (txt && txt.charCodeAt(0) === 0xfeff) txt = txt.slice(1);
+                var trimmed = txt ? String(txt).trim() : "";
+                if (trimmed.length > 0 && (trimmed.charAt(0) === "{" || trimmed.charAt(0) === "[")) {
+                    try {
+                        return JSON.parse(trimmed);
+                    } catch (e) {
+                        /* fall through to responseJSON */
+                    }
+                }
+                if (xhr.responseJSON) return xhr.responseJSON;
+                return null;
+            }
+            function portalAppointmentCoalesceHumanMessage(j) {
+                function nz(v) {
+                    if (v == null) return null;
+                    var s = String(v).trim();
+                    return s ? s : null;
+                }
+                if (!j) return null;
+                var m = nz(j.message) || nz(j.Message) || nz(j.errorMessage) || nz(j.ErrorMessage)
+                    || nz(j.description) || nz(j.Description) || nz(j.detail) || nz(j.Detail)
+                    || nz(j.title) || nz(j.Title);
+                if (m) return m;
+                var errs = j.errors || j.Errors;
+                if (!errs) return null;
+                if (Array.isArray(errs) && errs.length) {
+                    var p = [];
+                    for (var i = 0; i < errs.length; i++) {
+                        var t = nz(errs[i]);
+                        if (t) p.push(t);
+                    }
+                    return p.length ? p.join(" ") : null;
+                }
+                if (typeof errs === "object") {
+                    var p2 = [];
+                    for (var k in errs) {
+                        if (!Object.prototype.hasOwnProperty.call(errs, k)) continue;
+                        var v = errs[k];
+                        if (Array.isArray(v)) {
+                            for (var ii = 0; ii < v.length; ii++) {
+                                var t2 = nz(v[ii]);
+                                if (t2) p2.push(t2);
+                            }
+                        } else {
+                            var t3 = nz(v);
+                            if (t3) p2.push(t3);
+                        }
+                    }
+                    return p2.length ? p2.join(" ") : null;
+                }
+                return null;
+            }
+            w.portalAppointmentMessageFromJsonResult = function (r) {
+                return portalAppointmentCoalesceHumanMessage(r)
+                    || (r && (String(r.errorMessage || r.ErrorMessage || "").trim() || null));
+            };
+            w.portalAppointmentParseError = function (xhr) {
+                var j = portalAppointmentParseJsonBody(xhr);
+                if (!j) return { errorCode: null, message: null, errors: null, minimumLeadHours: null };
+                var human = portalAppointmentCoalesceHumanMessage(j);
+                var rawEc = j.errorCode != null ? j.errorCode : (j.ErrorCode != null ? j.ErrorCode : (j.error && (j.error.code != null ? j.error.code : j.error.Code)));
+                var errorCodeStr = rawEc == null || rawEc === "" ? null : String(rawEc);
+                return {
+                    errorCode: errorCodeStr,
+                    message: human,
+                    errors: j.errors || j.Errors || null,
+                    minimumLeadHours: j.minimumLeadHours != null ? j.minimumLeadHours : (j.MinimumLeadHours != null ? j.MinimumLeadHours : null)
+                };
+            };
+            w.portalAppointmentFormatErrors = function (b) {
+                if (!b || !b.errors) return null;
+                if (Array.isArray(b.errors) && b.errors.length) return b.errors.join(" ");
+                if (typeof b.errors === "object") {
+                    var parts = [];
+                    for (var k in b.errors) {
+                        if (!Object.prototype.hasOwnProperty.call(b.errors, k)) continue;
+                        var v = b.errors[k];
+                        if (Array.isArray(v)) parts = parts.concat(v);
+                        else if (v) parts.push(String(v));
+                    }
+                    return parts.length ? parts.join(" ") : null;
+                }
+                return null;
+            };
+            w.portalAppointmentHandleHttpError = function (xhr, opts) {
+                opts = opts || {};
+                var $span = opts.$span;
+                var onDone = opts.onDone;
+                function finish() { if (typeof onDone === "function") onDone(); }
+                function showGeneric(msg) {
+                    if ($span && $span.length) $span.text(msg).show();
+                    if (typeof toastr !== "undefined") toastr.error(msg);
+                    else alert(msg);
+                    finish();
+                }
+                if (xhr.status !== 400) {
+                    var parsed = w.portalAppointmentParseError(xhr);
+                    var msg = parsed.message || w.portalAppointmentFormatErrors(parsed)
+                        || (xhr.responseText && xhr.responseText.length < 400 ? String(xhr.responseText).trim() : null)
+                        || "Request failed.";
+                    showGeneric(msg);
+                    return;
+                }
+                var b = w.portalAppointmentParseError(xhr);
+                var code = b.errorCode;
+                var text = b.message || w.portalAppointmentFormatErrors(b)
+                    || (xhr.responseText && xhr.responseText.length < 400 ? String(xhr.responseText).trim() : null)
+                    || "Request could not be completed.";
+                if (code === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                    if (typeof toastr !== "undefined") toastr.warning(text);
+                    else alert(text);
+                    if ($span && $span.length) $span.text(text).show();
+                    finish();
+                    return;
+                }
+                if (code === "APPOINTMENT_TIME_REQUIRED") {
+                    if ($span && $span.length) $span.text(text).show();
+                    if (typeof toastr !== "undefined") toastr.info(text);
+                    else alert(text);
+                    finish();
+                    return;
+                }
+                if (code === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
+                    if ($span && $span.length) $span.text(text).show();
+                    if (typeof toastr !== "undefined") toastr.warning(text);
+                    else alert(text);
+                    finish();
+                    return;
+                }
+                showGeneric(text);
+            };
+            w.portalNotifySlotPick = function (msg) {
+                if (typeof toastr !== "undefined") toastr.warning(msg);
+                else alert(msg);
+            };
+            w.portalValidateAppointmentSlotClickTime = function (clickedDateTime) {
+                var now = new Date();
+                if (clickedDateTime < now) {
+                    w.portalNotifySlotPick("This time is in the past. Please choose a future date and time.");
+                    return false;
+                }
+                if (clickedDateTime.getTime() - now.getTime() < 60 * 60 * 1000) {
+                    w.portalNotifySlotPick("Appointment must be at least one hour from now.");
+                    return false;
+                }
+                return true;
+            };
+        })(window);
         $(document).ready(function () {
             $("#SubmitCancel").click(function () {
                 var appointmentId = $("#CancelPatientId").val();
                 var statusId = $("#StatusIds").val();
                 var reason = $("#pi-Resason").val().trim(); // Trim spaces
+
+                if (!appointmentId || String(appointmentId).trim() === "") {
+                    alert("Could not determine the appointment. Please close the dialog, select the row again, and try cancel.");
+                    return;
+                }
 
                 if (reason === "") {
                     $("#Span-reson").text("Reason is required");
@@ -1025,10 +1402,18 @@
                     $("#Span-reson").text(""); // Clear error if input is valid
                 }
 
+                var isApptRequest = $("#PortalRowIsAppointmentRequest").val() === "true";
+                var patientIdVal = $("#PortalRowPatientId").val();
+                if (isApptRequest && (!patientIdVal || String(patientIdVal).trim() === "")) {
+                    alert("Missing patient for this request. Please select the row again.");
+                    return;
+                }
                 var requestData = {
-                    Id: appointmentId,
-                    StatusId: statusId,
-                    Comment: reason
+                    Id: Number(appointmentId),
+                    StatusId: Number(statusId),
+                    Comment: reason,
+                    isAppointmentRequest: isApptRequest,
+                    PatientId: patientIdVal ? Number(patientIdVal) : null
                 };
 
                 $.ajax({
@@ -1037,11 +1422,15 @@
                     contentType: "application/json",
                     data: JSON.stringify(requestData),
                     success: function (response) {
+                        if (response && response.isSuccess === false) {
+                            alert(response.message || "Failed to cancel.");
+                            return;
+                        }
                         localStorage.setItem("showCancelSuccessMessage", "true"); // Set flag before reload
                         location.reload(); // Reload page
                     },
-                    error: function () {
-                        alert("Failed to submit reschedule request.");
+                    error: function (xhr) {
+                        portalAppointmentHandleHttpError(xhr, {});
                     }
                 });
             });
@@ -1075,8 +1464,13 @@
                 <input type="hidden" id="StatusId" value="77" name="medicalPatientSignature" class="custom-field-height" />
                 <div class="modal-body">
                     <div class="">
-                        <label for="pi-resched" class="form-label">Appointment Date Time*</label>
-                        <ejs-datetimepicker id="pi-resched" step="15" min="DateTime.Now" style="height:45px;" format="@Model.EjsDateTimePattern" readonly></ejs-datetimepicker>
+                        <label for="pi-resched" class="form-label">Appointment Date &amp; Time*</label>
+                        <div class="datetimepicker-container appointment-portal-dtp">
+                            <ejs-datetimepicker id="pi-resched" cssClass="appointment-dtp-ejs" step="15" min="DateTime.Now" style="height:45px;" format="@Model.EjsDateTimePattern" placeholder="Select date and time" readonly="true"></ejs-datetimepicker>
+                            <button type="button" class="scheduler-icon" id="open-patient-reschedule-slot-btn" title="Pick a slot from the full calendar">
+                                <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                            </button>
+                        </div>
                         <span id="AptDatetime-reson" class="text-danger"></span>
                     </div>
                 </div>
@@ -1274,8 +1668,8 @@
                         $("#OC-reschedSpan").text("Appointment date and time cannot be in the past.");
                         isValid = false;
                     }
-                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 30 * 60 * 1000) {
-                        $("#OC-reschedSpan").text("Appointment must be at least 30 minutes from now.");
+                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 60 * 60 * 1000) {
+                        $("#OC-reschedSpan").text("Appointment must be at least one hour from now.");
                         isValid = false;
                     }
                     // Validate month and date range
@@ -1321,7 +1715,23 @@
                     data: JSON.stringify(requestData),
                     success: function (response) {
                         if (!response.isSuccess) {
-                            $("#OC-reschedSpan").text(response.errorMessage).show();
+                            var ec = response.errorCode || response.ErrorCode;
+                            var em = w.portalAppointmentMessageFromJsonResult(response) || "Request could not be completed.";
+                            if (ec === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                                $("#OC-reschedSpan").text(em).show();
+                            } else if (ec === "APPOINTMENT_TIME_REQUIRED") {
+                                $("#OC-reschedSpan").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.info(em);
+                                else alert(em);
+                            } else if (ec === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
+                                $("#OC-reschedSpan").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                            } else {
+                                $("#OC-reschedSpan").text(em).show();
+                            }
                             $button.prop("disabled", false).text("Save");
                         }
                         else {
@@ -1329,8 +1739,11 @@
                             location.reload(); // Reload page
                         }
                     },
-                    error: function () {
-                        alert("Failed to submit reschedule request.");
+                    error: function (xhr) {
+                        portalAppointmentHandleHttpError(xhr, {
+                            $span: $("#OC-reschedSpan"),
+                            onDone: function () { $button.prop("disabled", false).text("Save"); }
+                        });
                     }
                 });
 
@@ -1538,8 +1951,8 @@
                         $("#RP-reschedSpan").text("Invalid Appointment Date Time.");
                         isValid = false;
                     }
-                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 30 * 60 * 1000) {
-                        $("#RP-reschedSpan").text("Appointment must be at least 30 minutes from now.");
+                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 60 * 60 * 1000) {
+                        $("#RP-reschedSpan").text("Appointment must be at least one hour from now.");
                         isValid = false;
                     }
                     else if (enteredDateTime.getDay() === 0) {
@@ -1575,7 +1988,23 @@
                     success: function (response) {
 
                         if (!response.isSuccess) {
-                            $("#RP-reschedSpan").text(response.errorMessage).show();
+                            var ec = response.errorCode || response.ErrorCode;
+                            var em = w.portalAppointmentMessageFromJsonResult(response) || "Request could not be completed.";
+                            if (ec === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                                $("#RP-reschedSpan").text(em).show();
+                            } else if (ec === "APPOINTMENT_TIME_REQUIRED") {
+                                $("#RP-reschedSpan").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.info(em);
+                                else alert(em);
+                            } else if (ec === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
+                                $("#RP-reschedSpan").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                            } else {
+                                $("#RP-reschedSpan").text(em).show();
+                            }
                             $button.prop("disabled", false).text("Save");
                         }
                         else {
@@ -1583,8 +2012,11 @@
                             location.reload(); // Reload page
                         }
                     },
-                    error: function () {
-                        alert("Failed to submit reschedule request.");
+                    error: function (xhr) {
+                        portalAppointmentHandleHttpError(xhr, {
+                            $span: $("#RP-reschedSpan"),
+                            onDone: function () { $button.prop("disabled", false).text("Save"); }
+                        });
                     }
                 });
 
@@ -1663,29 +2095,30 @@
         });
 
     </script>
-    <div class="modal fade" id="schedulerModal" tabindex="-1" aria-labelledby="schedulerModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title" id="schedulerModalLabel">Doctor Schedule</h5>
+
+    <div class="modal fade" id="appointmentSlotModal" tabindex="-1" aria-labelledby="appointmentSlotModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-fullscreen d-flex flex-column m-0">
+            <div class="modal-content d-flex flex-column flex-grow-1 rounded-0 border-0">
+                <div class="modal-header border-bottom py-2 py-md-3">
+                    <h5 class="modal-title" id="appointmentSlotModalLabel">Pick a date and time</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="control-section">
-                        <div class="schedule-wrapper">
-                            <ejs-schedule id="schedulerss" height="100%" width="100%"
+                <div class="modal-body d-flex flex-column flex-grow-1 p-0 overflow-hidden">
+                    <div class="appointment-schedule-modal-wrap control-section flex-grow-1">
+                        <div class="schedule-wrapper-modal">
+                            <ejs-schedule id="appointmentSlotSchedule"
+                                          width="100%" height="100%"
                                           selectedDate="DateTime.Today"
-                                          allowDragAndDrop="false" allowResizing="false"
                                           startHour="10:00" endHour="19:15"
+                                          allowDragAndDrop="false" allowResizing="false"
                                           workDays="new int[] {1, 2, 3, 4, 5, 6}"
-                                          cellClick="onCellClick" showQuickInfo="false">
+                                          cellClick="onPatientRescheduleSlotCellClick">
                                 <e-schedule-views>
                                     <e-schedule-view option="Day"></e-schedule-view>
                                     <e-schedule-view option="Week"></e-schedule-view>
                                 </e-schedule-views>
                                 <e-schedule-timescale interval="15" slotCount="1"></e-schedule-timescale>
-
-                                <e-schedule-eventsettings dataSource="Model.Doctorblocktime" template="#blockTemplate"></e-schedule-eventsettings>
+                                <e-schedule-eventsettings dataSource="@appointmentSlotScheduleInitialData" template="#appointmentBlockTemplate"></e-schedule-eventsettings>
                             </ejs-schedule>
                         </div>
                     </div>
@@ -1694,236 +2127,384 @@
         </div>
     </div>
 
+    <script id="appointmentBlockTemplate" type="text/x-template">
+        <div class="blocked-slot" style="background-color:#7AB6E0;color:#fff;text-align:center;font-weight:600;padding:5px 6px;border-radius:4px;box-sizing:border-box;min-height:100%;width:100%;line-height:1.25;">Not available</div>
+    </script>
+
     <script>
-        let selectedScheduleDate = null;
+        (function () {
+            function splitMergedIntervalIntoWorkdaySegments(interval, workStartH, workStartM, workEndH, workEndM) {
+                var segments = [];
+                var start = interval.start instanceof Date ? interval.start : new Date(interval.start);
+                var end = interval.end instanceof Date ? interval.end : new Date(interval.end);
+                if (isNaN(start.getTime()) || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+                    return segments;
+                }
+                var cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                var endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                while (cursor.getTime() <= endDay.getTime()) {
+                    var workStart = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), workStartH, workStartM, 0, 0);
+                    var workEnd = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), workEndH, workEndM, 0, 0);
+                    var segStart = start.getTime() > workStart.getTime() ? start : workStart;
+                    var segEnd = end.getTime() < workEnd.getTime() ? end : workEnd;
+                    if (segStart.getTime() < segEnd.getTime()) {
+                        segments.push({ start: new Date(segStart), end: new Date(segEnd) });
+                    }
+                    cursor.setDate(cursor.getDate() + 1);
+                }
+                return segments;
+            }
 
-        // Capture AppointmentStartTime + 7 days on reschedule button click
+            function mergeDateIntervals(intervals, gapMs) {
+                gapMs = gapMs == null ? 120000 : gapMs;
+                if (!intervals || !intervals.length) return [];
+                var valid = [];
+                for (var i = 0; i < intervals.length; i++) {
+                    var iv = intervals[i];
+                    if (!iv || !iv.start || !iv.end) continue;
+                    var s = iv.start instanceof Date ? iv.start : new Date(iv.start);
+                    var e = iv.end instanceof Date ? iv.end : new Date(iv.end);
+                    if (isNaN(s.getTime()) || isNaN(e.getTime())) continue;
+                    if (e.getTime() <= s.getTime()) {
+                        e = new Date(s.getTime() + 15 * 60 * 1000);
+                    }
+                    valid.push({ start: s, end: e });
+                }
+                valid.sort(function (a, b) { return a.start - b.start; });
+                var out = [];
+                for (var j = 0; j < valid.length; j++) {
+                    var cur = valid[j];
+                    if (!out.length) {
+                        out.push({ start: new Date(cur.start), end: new Date(cur.end) });
+                        continue;
+                    }
+                    var last = out[out.length - 1];
+                    if (cur.start.getTime() <= last.end.getTime() + gapMs) {
+                        if (cur.end.getTime() > last.end.getTime()) last.end = new Date(cur.end);
+                    } else {
+                        out.push({ start: new Date(cur.start), end: new Date(cur.end) });
+                    }
+                }
+                return out;
+            }
+
+            function intervalsFromDoctorBlocks(items) {
+                var list = [];
+                if (!items || !items.length) return list;
+                for (var i = 0; i < items.length; i++) {
+                    var item = items[i];
+                    var startRaw = item.procedureScheduleDateTime != null ? item.procedureScheduleDateTime : item.ProcedureScheduleDateTime;
+                    var endRaw = item.procedureScheduleEndDateTime != null ? item.procedureScheduleEndDateTime : item.ProcedureScheduleEndDateTime;
+                    if (startRaw == null) continue;
+                    var s = new Date(startRaw);
+                    if (isNaN(s.getTime())) continue;
+                    var e = endRaw != null ? new Date(endRaw) : null;
+                    if (!e || isNaN(e.getTime()) || e.getTime() <= s.getTime()) {
+                        e = new Date(s.getTime() + 15 * 60 * 1000);
+                    }
+                    list.push({ start: s, end: e });
+                }
+                return list;
+            }
+
+            function patientRescheduleScheduleDefaultView() {
+                return window.matchMedia('(max-width: 767.98px)').matches ? 'Day' : 'Week';
+            }
+
+            function buildPatientRescheduleBlockAppointments(doctorBlockTimes, doctorLeaves, selectedDoctorId) {
+                selectedDoctorId = selectedDoctorId == null ? 1 : selectedDoctorId;
+                var doctorLeaveSlots = (doctorLeaves || [])
+                    .filter(function (x) { return Number(x.doctorId) === Number(selectedDoctorId); })
+                    .map(function (x) {
+                        return {
+                            start: new Date(x.startDateTime),
+                            end: new Date(x.endDateTime || x.startDateTime)
+                        };
+                    });
+                var blockIntervals = intervalsFromDoctorBlocks(doctorBlockTimes || []);
+                var leaveIntervals = doctorLeaveSlots.map(function (slot) {
+                    return { start: slot.start, end: slot.end };
+                });
+                var mergedAll = mergeDateIntervals(blockIntervals.concat(leaveIntervals), 120000);
+                var blockAppointments = [];
+                mergedAll.forEach(function (m, idx) {
+                    splitMergedIntervalIntoWorkdaySegments(m, 10, 0, 19, 15).forEach(function (seg, j) {
+                        blockAppointments.push({
+                            Id: 'busy-day-' + idx + '-' + j + '-' + seg.start.getTime(),
+                            Subject: 'Not available',
+                            StartTime: seg.start,
+                            EndTime: seg.end,
+                            IsReadonly: true,
+                            CategoryColor: '#7AB6E0'
+                        });
+                    });
+                });
+                return { blockAppointments: blockAppointments, doctorLeaveSlots: doctorLeaveSlots };
+            }
+
+            window.patientRescheduleScheduleApi = {
+                buildPatientRescheduleBlockAppointments: buildPatientRescheduleBlockAppointments,
+                patientRescheduleScheduleDefaultView: patientRescheduleScheduleDefaultView
+            };
+        })();
+
         document.addEventListener("click", function (e) {
-            const target = e.target.closest(".app-resched");
+            var target = e.target.closest(".app-resched");
             if (target && target.dataset.starttime) {
-                const originalDate = new Date(target.dataset.starttime);
-                const today = new Date();
-                today.setHours(0, 0, 0, 0); // Normalize to midnight
-
-                const appointmentDate = new Date(originalDate);
-                appointmentDate.setHours(0, 0, 0, 0); // Normalize to midnight
-
+                var originalDate = new Date(target.dataset.starttime);
+                var today = new Date();
+                today.setHours(0, 0, 0, 0);
+                var appointmentDate = new Date(originalDate);
+                appointmentDate.setHours(0, 0, 0, 0);
                 if (appointmentDate >= today) {
-                    originalDate.setDate(originalDate.getDate() + 7); // future or today -> +7 days
-                    selectedScheduleDate = originalDate;
+                    originalDate.setDate(originalDate.getDate() + 7);
+                    window.__patientRescheduleSchedulerAnchorDate = originalDate;
                 } else {
-                    selectedScheduleDate = new Date(); // past -> use today
+                    window.__patientRescheduleSchedulerAnchorDate = new Date();
                 }
             }
         });
 
-        document.addEventListener("DOMContentLoaded", function () {
-            $('#schedulerModal').on('shown.bs.modal', function () {
-                loadSchedulerData(); // Modal open hone par function call hoga
-            });
-        });
-
-        function loadSchedulerData() {
+        (function () {
             var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
             var holidays = @Html.Raw(Json.Serialize(Model.Holidays));
-            var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves)); // <-- ADD THIS
+            var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves));
+            var appointmentSlotScheduleInited = false;
 
-            var selectedDoctorId = 1;
-            var holidayDates = holidays.map(function (item) {
-                var d = new Date(item.startDate);
-                return d.getFullYear() + "-" +
-                    String(d.getMonth() + 1).padStart(2, '0') + "-" +
-                    String(d.getDate()).padStart(2, '0');
-            });
-
-            var doctorLeaveSlots = doctorLeaves
-                .filter(x => x.doctorId === selectedDoctorId)
-                .map(function (x) {
-                    return {
-                        start: new Date(x.startDateTime),
-                        end: new Date(x.endDateTime || x.startDateTime)
-                    };
-                });
-            console.log("Holiday Dates:", holidayDates);
-            console.log("Doctor Leave Slots:", doctorLeaveSlots);
-            // Global for main scheduler click blocking
-            window.patientDoctorLeaveSlots = doctorLeaveSlots;
-            var holidayDates = holidays.map(function (item) {
-                return new Date(item.startDate).toISOString().split('T')[0];
-            });
-
-            if (!doctorBlockTimes || doctorBlockTimes.length === 0) {
-                console.log("No blocked appointments found.");
-                return;
-            } else {
-                console.log("Blocked Appointments:", doctorBlockTimes);
+            function appointmentSlotScheduleDefaultView() {
+                return window.matchMedia('(max-width: 767.98px)').matches ? 'Day' : 'Week';
             }
 
-            setTimeout(function () {
-                var scheduleObj = document.getElementById('schedulerss')?.ej2_instances?.[0];
-
-                if (!scheduleObj) {
-                    console.error("Scheduler instance not found.");
-                    return;
+            function splitMergedIntervalIntoWorkdaySegments(interval, workStartH, workStartM, workEndH, workEndM) {
+                var segments = [];
+                var start = interval.start instanceof Date ? interval.start : new Date(interval.start);
+                var end = interval.end instanceof Date ? interval.end : new Date(interval.end);
+                if (isNaN(start.getTime()) || isNaN(end.getTime()) || end.getTime() <= start.getTime()) {
+                    return segments;
                 }
-
-                // Set the selected date to 7 days after clicked appointment time
-                if (selectedScheduleDate) {
-                    scheduleObj.selectedDate = new Date(); // Current date
-                    scheduleObj.dataBind(); // Apply the selected date
+                var cursor = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+                var endDay = new Date(end.getFullYear(), end.getMonth(), end.getDate());
+                while (cursor.getTime() <= endDay.getTime()) {
+                    var workStart = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), workStartH, workStartM, 0, 0);
+                    var workEnd = new Date(cursor.getFullYear(), cursor.getMonth(), cursor.getDate(), workEndH, workEndM, 0, 0);
+                    var segStart = start.getTime() > workStart.getTime() ? start : workStart;
+                    var segEnd = end.getTime() < workEnd.getTime() ? end : workEnd;
+                    if (segStart.getTime() < segEnd.getTime()) {
+                        segments.push({ start: new Date(segStart), end: new Date(segEnd) });
+                    }
+                    cursor.setDate(cursor.getDate() + 1);
                 }
+                return segments;
+            }
 
+            function mergeDateIntervals(intervals, gapMs) {
+                gapMs = gapMs == null ? 120000 : gapMs;
+                if (!intervals || !intervals.length) return [];
+                var valid = [];
+                for (var i = 0; i < intervals.length; i++) {
+                    var iv = intervals[i];
+                    if (!iv || !iv.start || !iv.end) continue;
+                    var s = iv.start instanceof Date ? iv.start : new Date(iv.start);
+                    var e = iv.end instanceof Date ? iv.end : new Date(iv.end);
+                    if (isNaN(s.getTime()) || isNaN(e.getTime())) continue;
+                    if (e.getTime() <= s.getTime()) {
+                        e = new Date(s.getTime() + 15 * 60 * 1000);
+                    }
+                    valid.push({ start: s, end: e });
+                }
+                valid.sort(function (a, b) { return a.start - b.start; });
+                var out = [];
+                for (var j = 0; j < valid.length; j++) {
+                    var cur = valid[j];
+                    if (!out.length) {
+                        out.push({ start: new Date(cur.start), end: new Date(cur.end) });
+                        continue;
+                    }
+                    var last = out[out.length - 1];
+                    if (cur.start.getTime() <= last.end.getTime() + gapMs) {
+                        if (cur.end.getTime() > last.end.getTime()) last.end = new Date(cur.end);
+                    } else {
+                        out.push({ start: new Date(cur.start), end: new Date(cur.end) });
+                    }
+                }
+                return out;
+            }
 
-                // Mark holidays
+            function intervalsFromDoctorBlocks(items) {
+                var list = [];
+                if (!items || !items.length) return list;
+                for (var i = 0; i < items.length; i++) {
+                    var item = items[i];
+                    var startRaw = item.procedureScheduleDateTime != null ? item.procedureScheduleDateTime : item.ProcedureScheduleDateTime;
+                    var endRaw = item.procedureScheduleEndDateTime != null ? item.procedureScheduleEndDateTime : item.ProcedureScheduleEndDateTime;
+                    if (startRaw == null) continue;
+                    var s = new Date(startRaw);
+                    if (isNaN(s.getTime())) continue;
+                    var e = endRaw != null ? new Date(endRaw) : null;
+                    if (!e || isNaN(e.getTime()) || e.getTime() <= s.getTime()) {
+                        e = new Date(s.getTime() + 15 * 60 * 1000);
+                    }
+                    list.push({ start: s, end: e });
+                }
+                return list;
+            }
+
+            function initAppointmentSlotSchedule() {
+                if (appointmentSlotScheduleInited) return;
+                var scheduleEl = document.getElementById('appointmentSlotSchedule');
+                if (!scheduleEl || !scheduleEl.ej2_instances || !scheduleEl.ej2_instances[0]) return;
+                appointmentSlotScheduleInited = true;
+                var scheduleObj = scheduleEl.ej2_instances[0];
+                scheduleObj.currentView = appointmentSlotScheduleDefaultView();
+                var selectedDoctorId = 1;
+
+                var doctorLeaveSlots = doctorLeaves
+                    .filter(function (x) { return Number(x.doctorId) === Number(selectedDoctorId); })
+                    .map(function (x) {
+                        return {
+                            start: new Date(x.startDateTime),
+                            end: new Date(x.endDateTime || x.startDateTime)
+                        };
+                    });
+                window.calendarDoctorLeaveSlots = doctorLeaveSlots;
+
+                var holidayDates = (holidays || []).map(function (item) {
+                    return new Date(item.startDate).toISOString().split('T')[0];
+                });
+
+                var blockIntervals = intervalsFromDoctorBlocks(doctorBlockTimes);
+                var leaveIntervals = doctorLeaveSlots.map(function (slot) {
+                    return { start: slot.start, end: slot.end };
+                });
+                var mergedAll = mergeDateIntervals(blockIntervals.concat(leaveIntervals), 120000);
+                var blockAppointments = [];
+                mergedAll.forEach(function (m, idx) {
+                    splitMergedIntervalIntoWorkdaySegments(m, 10, 0, 19, 15).forEach(function (seg, j) {
+                        blockAppointments.push({
+                            Id: 'busy-day-' + idx + '-' + j + '-' + seg.start.getTime(),
+                            Subject: 'Not available',
+                            StartTime: seg.start,
+                            EndTime: seg.end,
+                            IsReadonly: true,
+                            CategoryColor: '#7AB6E0'
+                        });
+                    });
+                });
+
                 scheduleObj.renderCell = function (args) {
-                    if (args.elementType === "workCells" || args.elementType === "monthCells") {
+                    if (args.elementType === 'workCells' || args.elementType === 'monthCells') {
                         var cellDate = args.date.toISOString().split('T')[0];
                         if (holidayDates.includes(cellDate)) {
-                            args.element.classList.add("e-disabled", "holiday-cell");
+                            args.element.classList.add('e-disabled', 'holiday-cell');
                         }
-                        // Doctor 1 leave slots -> gray within time range
-                        if (Array.isArray(window.patientDoctorLeaveSlots)) {
-                            var inLeave = window.patientDoctorLeaveSlots.some(function (slot) {
+                        if (Array.isArray(window.calendarDoctorLeaveSlots)) {
+                            var inLeave = window.calendarDoctorLeaveSlots.some(function (slot) {
                                 return args.date >= slot.start && args.date < slot.end;
                             });
                             if (inLeave) {
-                                args.element.classList.add("e-disabled", "doctor-leave-cell");
+                                args.element.classList.add('e-disabled', 'doctor-leave-cell');
                             }
                         }
                     }
                 };
 
-                // Convert to scheduler-compatible event data
-                var blockAppointments = doctorBlockTimes.map(function (item) {
-                    var isPatientAppointment = item.isPatientAppointment === true;
-
-                    return {
-                        Id: item.id,
-                        Subject: isPatientAppointment ? 'Your Appointment' : 'Not available',
-                        StartTime: new Date(item.procedureScheduleDateTime),
-                        EndTime: new Date(item.procedureScheduleEndDateTime),
-                        IsReadonly: true,
-                        CategoryColor: isPatientAppointment ? '#28a745' : '#0061AB'
-                    };
-                });
-                // Block only leave time range (not full day)
-                doctorLeaveSlots.forEach(function (slot) {
-                    blockAppointments.push({
-                        Id: "LV-" + slot.start.toISOString(),
-                        Subject: "Doctor Leave",
-                        StartTime: slot.start,
-                        EndTime: slot.end,
-                        IsReadonly: true,
-                        CategoryColor: "#ff0000"  // Red color for leave block
-                    });
-                });
-                console.log("Final Event Data for Scheduler:", blockAppointments);
-
-                scheduleObj.eventSettings.dataSource = [];
-                scheduleObj.refresh();
-
-                scheduleObj.eventSettings.template = function (data) {
-                    var subject = data.Subject || '';
-                    var color = data.CategoryColor || '#0061AB';
-                    return `<div class="blocked-slot2" style="background-color:${color}; color:white; text-align:center;">${subject}</div>`;
+                scheduleObj.eventSettings.dataSource = blockAppointments;
+                scheduleObj.popupOpen = function (args) {
+                    if (args.type === 'Editor' && args.data.Id === undefined) {
+                        args.cancel = true;
+                    }
                 };
-
-                setTimeout(() => {
-                    scheduleObj.eventSettings.dataSource = blockAppointments;
+                if (typeof scheduleObj.refreshEvents === "function") {
+                    scheduleObj.refreshEvents();
+                } else {
                     scheduleObj.refresh();
-                }, 300);
+                }
 
-            }, 500);
-        }
-    </script>
+                var slotModalEl = document.getElementById('appointmentSlotModal');
+                if (slotModalEl) {
+                    slotModalEl.addEventListener('shown.bs.modal', function () {
+                        var el = document.getElementById('appointmentSlotSchedule');
+                        if (el && el.ej2_instances && el.ej2_instances[0]) {
+                            var inst = el.ej2_instances[0];
+                            inst.currentView = appointmentSlotScheduleDefaultView();
+                            if (window.__patientRescheduleSchedulerAnchorDate) {
+                                inst.selectedDate = new Date(window.__patientRescheduleSchedulerAnchorDate);
+                                window.__patientRescheduleSchedulerAnchorDate = null;
+                            }
+                            inst.refresh();
+                            if (typeof inst.refreshLayout === 'function') {
+                                setTimeout(function () { inst.refreshLayout(); }, 100);
+                            }
+                        }
+                    });
+                }
+            }
 
+            var slotScheduleTries = 0;
+            function tryInitSlotSchedule() {
+                initAppointmentSlotSchedule();
+                if (!appointmentSlotScheduleInited && slotScheduleTries++ < 120) {
+                    setTimeout(tryInitSlotSchedule, 80);
+                }
+            }
 
-    <script>
-        function onPopupOpen(args) {
-            // Quick popup open hone se rokna
-            if (args.type === "QuickInfo") {
-                args.cancel = true;
+            window.addEventListener('load', function () {
+                tryInitSlotSchedule();
+            });
+        })();
+
+        function onPatientRescheduleSlotCellClick(args) {
+            args.cancel = true;
+            var clickedDateTime = new Date(args.startTime);
+            if (typeof window.portalValidateAppointmentSlotClickTime === "function") {
+                if (!window.portalValidateAppointmentSlotClickTime(clickedDateTime)) return;
+            }
+            if (clickedDateTime.getDay() === 0) {
+                return;
+            }
+            if (Array.isArray(window.calendarDoctorLeaveSlots)) {
+                var inLeave = window.calendarDoctorLeaveSlots.some(function (slot) {
+                    return clickedDateTime >= slot.start && clickedDateTime < slot.end;
+                });
+                if (inLeave) return;
+            }
+
+            var dtpEl = document.getElementById('pi-resched');
+            if (dtpEl && dtpEl.ej2_instances && dtpEl.ej2_instances[0]) {
+                dtpEl.ej2_instances[0].value = clickedDateTime;
+                dtpEl.ej2_instances[0].dataBind();
+            }
+
+            var modalEl = document.getElementById('appointmentSlotModal');
+            if (modalEl && typeof bootstrap !== 'undefined') {
+                var inst = bootstrap.Modal.getInstance(modalEl);
+                if (!inst) inst = bootstrap.Modal.getOrCreateInstance(modalEl);
+                inst.hide();
+            }
+
+            var appReschedEl = document.getElementById('app-resched');
+            if (appReschedEl && typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getOrCreateInstance(appReschedEl).show();
             }
         }
-    </script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            var scheduleObj = document.getElementById('schedulerss').ej2_instances[0];
 
-            scheduleObj.popupOpen = function (args) {
-                if (args.type === "Editor" && args.data.Id === undefined) {
-                    args.cancel = true; // Disable double-click popup (event creation popup)
+        $(document).ready(function () {
+            $('#open-patient-reschedule-slot-btn').on('click', function () {
+                var modalEl = document.getElementById('appointmentSlotModal');
+                if (modalEl && typeof bootstrap !== 'undefined') {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).show();
                 }
-            };
+            });
         });
     </script>
 
 
     <script>
-        function onCellClick(args) {
-            // Prevent default popup behavior
-            args.cancel = true;
-
-            var currentDateTime = new Date(); // Current Date & Time
-            var clickedDateTime = new Date(args.startTime); // Clicked Cell Date & Time
-
-            // अगर क्लिक किया गया datetime past है तो event रोक दो
-            if (clickedDateTime < currentDateTime) {
-                alert("You cannot select this time or date for appointments.");
-                return; // Stop execution (No further action)
-            }
-
-            // Sunday never clickable
-            var clickedDate = new Date(args.startTime);
-            var day = clickedDate.getDay();
-            if (day === 0) {
+        function onPopupOpen(args) {
+            if (args.type === "QuickInfo") {
                 args.cancel = true;
-                return;
             }
-
-            // अगर clicked time Doctor 1 के leave slot में है, तो disable
-            if (Array.isArray(window.patientDoctorLeaveSlots)) {
-                var inLeave = window.patientDoctorLeaveSlots.some(function (slot) {
-                    return clickedDateTime >= slot.start && clickedDateTime < slot.end;
-                });
-                if (inLeave) {
-                    args.cancel = true;
-                    return;
-                }
-            }
-
-            // Get the clicked slot's start time
-            let startTime = args.startTime;
-
-            // Convert to ISO 8601 format (YYYY-MM-DDTHH:MM:SS.SSSZ)
-            let formattedTime = startTime.toISOString();
-
-            // **Step 1:** `schedulerModal` को बंद करना
-            var schedulerModalEl = document.getElementById('schedulerModal');
-            var schedulerModal = bootstrap.Modal.getInstance(schedulerModalEl);
-            if (schedulerModal) {
-                schedulerModal.hide();
-            }
-
-            // **Step 2:** `schedulerModal` से जुड़ा modal-backdrop हटाना
-            schedulerModalEl.addEventListener('hidden.bs.modal', function () {
-                let backdrop = document.querySelector('.modal-backdrop');
-                if (backdrop) {
-                    backdrop.remove(); // सिर्फ `schedulerModal` का backdrop हटाएगा
-                }
-            });
-
-            // **Step 3:** Reschedule Appointment Modal (`app-resched`) खोलना
-            var rescheduleModal = new bootstrap.Modal(document.getElementById('app-resched'));
-            rescheduleModal.show();
-
-            // **Step 4:** Selected Date Time को ejs-datetimepicker में सेट करना
-            var dateTimePicker = document.getElementById("pi-resched").ej2_instances[0];
-            dateTimePicker.value = new Date(startTime);
         }
-
-
-
     </script>
 
 
@@ -1946,23 +2527,25 @@
     <!-- JavaScript to Open Modal -->
     <script>
         function openSchedulerPopup() {
-            var modal = new bootstrap.Modal(document.getElementById('schedulerModal'));
-            modal.show();
+            var el = document.getElementById('appointmentSlotModal');
+            if (el && typeof bootstrap !== 'undefined') {
+                bootstrap.Modal.getOrCreateInstance(el).show();
+            }
         }
     </script>
 
 
     <!-- Second Scheduler Modal -->
     <div class="modal fade" id="schedulerModal2" tabindex="-1" aria-labelledby="schedulerModalLabel2" aria-hidden="true">
-        <div class="modal-dialog modal-fullscreen">
-            <div class="modal-content">
-                <div class="modal-header">
+        <div class="modal-dialog modal-fullscreen d-flex flex-column m-0">
+            <div class="modal-content d-flex flex-column flex-grow-1 rounded-0 border-0">
+                <div class="modal-header border-bottom py-2 py-md-3">
                     <h5 class="modal-title" id="schedulerModalLabel">Doctor Schedule</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body">
-                    <div class="control-section">
-                        <div class="schedule-wrapper">
+                <div class="modal-body d-flex flex-column flex-grow-1 p-0 overflow-hidden">
+                    <div class="appointment-schedule-modal-wrap control-section flex-grow-1">
+                        <div class="schedule-wrapper-modal">
                             <ejs-schedule id="schedulerss2" height="100%" width="100%"
                                           selectedDate="DateTime.Today"
                                           allowDragAndDrop="false" allowResizing="false"
@@ -1974,7 +2557,7 @@
                                     <e-schedule-view option="Week"></e-schedule-view>
                                 </e-schedule-views>
                                 <e-schedule-timescale interval="15" slotCount="1"></e-schedule-timescale>
-                                <e-schedule-eventsettings dataSource="@Model.Doctorblocktime" template="#blockTemplate2"></e-schedule-eventsettings>
+                                <e-schedule-eventsettings dataSource="@patientRescheduleScheduleInitialData" template="#appointmentBlockTemplate"></e-schedule-eventsettings>
                             </ejs-schedule>
                         </div>
                     </div>
@@ -1994,38 +2577,21 @@
         });
 
         function loadSchedulerData2(schedulerId) {
-            debugger;
             var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
             var holidays = @Html.Raw(Json.Serialize(Model.Holidays));
-            var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves)); // <-- ADD THIS
-
+            var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves));
             var selectedDoctorId = 1;
-            var holidayDates = holidays.map(function (item) {
-                var d = new Date(item.startDate);
-                return d.getFullYear() + "-" +
-                    String(d.getMonth() + 1).padStart(2, '0') + "-" +
-                    String(d.getDate()).padStart(2, '0');
-            });
 
-            var doctorLeaveSlots = doctorLeaves
-                .filter(x => x.doctorId === selectedDoctorId)
-                .map(function (x) {
-                    return {
-                        start: new Date(x.startDateTime),
-                        end: new Date(x.endDateTime || x.startDateTime)
-                    };
-                });
-            console.log("Holiday Dates:", holidayDates);
-            console.log("Doctor Leave Slots:", doctorLeaveSlots);
-            // Global for second scheduler click blocking
+            var built = window.patientRescheduleScheduleApi.buildPatientRescheduleBlockAppointments(
+                doctorBlockTimes, doctorLeaves, selectedDoctorId);
+            var blockAppointments = built.blockAppointments;
+            var doctorLeaveSlots = built.doctorLeaveSlots;
+
             window.patientDoctorLeaveSlots2 = doctorLeaveSlots;
 
-            if (!doctorBlockTimes || doctorBlockTimes.length === 0) {
-                console.log("No blocked appointments found.");
-                return;
-            } else {
-                console.log("Blocked Appointments:", doctorBlockTimes);
-            }
+            var holidayDates = (holidays || []).map(function (item) {
+                return new Date(item.startDate).toISOString().split('T')[0];
+            });
 
             setTimeout(function () {
                 var scheduleObj = document.getElementById(schedulerId)?.ej2_instances?.[0];
@@ -2034,13 +2600,17 @@
                     console.error("Scheduler instance not found.");
                     return;
                 }
+
+                scheduleObj.currentView = window.patientRescheduleScheduleApi.patientRescheduleScheduleDefaultView();
+                scheduleObj.selectedDate = new Date();
+                scheduleObj.showAllDayPanel = false;
+
                 scheduleObj.renderCell = function (args) {
                     if (args.elementType === "workCells" || args.elementType === "monthCells") {
-                        var cellDate = args.date.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+                        var cellDate = args.date.toISOString().split('T')[0];
                         if (holidayDates.includes(cellDate)) {
-                            args.element.classList.add("e-disabled", "holiday-cell"); // Apply custom class
+                            args.element.classList.add("e-disabled", "holiday-cell");
                         }
-                        // Doctor 1 leave slots -> gray within time range
                         if (Array.isArray(window.patientDoctorLeaveSlots2)) {
                             var inLeave = window.patientDoctorLeaveSlots2.some(function (slot) {
                                 return args.date >= slot.start && args.date < slot.end;
@@ -2051,49 +2621,20 @@
                         }
                     }
                 };
-                // Convert data to Scheduler format
-                var blockAppointments = doctorBlockTimes.map(function (item) {
-                    var isPatientAppointment = item.isPatientAppointment === true;
 
-                    return {
-                        Id: item.id,
-                        Subject: isPatientAppointment ? 'Your Appointment' : 'Not available', // Change subject
-                        StartTime: new Date(item.procedureScheduleDateTime),
-                        EndTime: new Date(item.procedureScheduleEndDateTime),
-                        IsReadonly: true,
-                        CategoryColor: isPatientAppointment ? '#28a745' : '#0061AB'  // Green for patient, Red for normal
-                    };
-                });
-                // Block only leave time range (not full day)
-                doctorLeaveSlots.forEach(function (slot) {
-                    blockAppointments.push({
-                        Id: "LV-" + slot.start.toISOString(),
-                        Subject: "Doctor Leave",
-                        StartTime: slot.start,
-                        EndTime: slot.end,
-                        IsReadonly: true,
-                        CategoryColor: "#ff0000"  // Red color for leave block
-                    });
-                });
-
-                
-                scheduleObj.eventSettings.template = function (data) {
-                    var subject = data.Subject || '';
-                    var color = data.CategoryColor || '#0061AB';
-                    return `<div class="blocked-slot2" style="background-color:${color}; color:white; text-align:center;">${subject}</div>`;
+                scheduleObj.eventSettings.dataSource = blockAppointments;
+                scheduleObj.popupOpen = function (args) {
+                    if (args.type === 'Editor' && args.data.Id === undefined) {
+                        args.cancel = true;
+                    }
                 };
-
-                console.log("Final Event Data for Scheduler:", blockAppointments);
-
-                // Reset scheduler and load new data
-                scheduleObj.eventSettings.dataSource = [];
-                scheduleObj.refresh();
-
-                setTimeout(() => {
-                    scheduleObj.eventSettings.dataSource = blockAppointments;
-                    scheduleObj.refresh();
-                }, 300);
-
+                scheduleObj.dataBind();
+                if (typeof scheduleObj.refreshEvents === 'function') {
+                    scheduleObj.refreshEvents();
+                }
+                if (typeof scheduleObj.refreshLayout === 'function') {
+                    scheduleObj.refreshLayout();
+                }
             }, 500);
         }
 
@@ -2133,12 +2674,10 @@
 
         function handleCellClick(args, modalId) {
             args.cancel = true;
-            var currentDateTime = new Date();
             var clickedDateTime = new Date(args.startTime);
 
-            if (clickedDateTime < currentDateTime) {
-                alert("You cannot select this time or date for appointments.");
-                return;
+            if (typeof window.portalValidateAppointmentSlotClickTime === "function") {
+                if (!window.portalValidateAppointmentSlotClickTime(clickedDateTime)) return;
             }
 
             // Sunday never clickable
@@ -2213,9 +2752,19 @@
         $(document).ready(function () {
             $("#SubmitRescedule").click(function () {
                 var $button = $(this); // Button ko reference karna
+                var appointmentId = $("#AppoinmentId").val();
+                if (!appointmentId || String(appointmentId).trim() === "") {
+                    alert("Could not determine the appointment. Please close the dialog, select the row again, and try reschedule.");
+                    return;
+                }
+                var isApptRequestEarly = $("#PortalRowIsAppointmentRequest").val() === "true";
+                var patientIdValEarly = $("#PortalRowPatientId").val();
+                if (isApptRequestEarly && (!patientIdValEarly || String(patientIdValEarly).trim() === "")) {
+                    alert("Missing patient for this request. Please select the row again.");
+                    return;
+                }
                 $button.prop("disabled", true).text("Submitting..."); // Button disable aur text change karein
                 var isValid = true;
-                var appointmentId = $("#AppoinmentId").val();
                 var statusId = $("#StatusId").val();
                 var appointmentDateTime = $("#pi-resched").val();
                 var selectedDate = appointmentDateTime;
@@ -2268,8 +2817,8 @@
                         $("#AptDatetime-reson").text("Invalid Appointment Date Time.");
                         isValid = false;
                     }
-                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 30 * 60 * 1000) {
-                        $("#AptDatetime-reson").text("Appointment must be at least 30 minutes from now.");
+                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 60 * 60 * 1000) {
+                        $("#AptDatetime-reson").text("Appointment must be at least one hour from now.");
                         isValid = false;
                     }
                     else if (enteredDateTime.getDay() === 0) {
@@ -2291,10 +2840,14 @@
                 var formattedDate = convertDateFormat(appointmentDateTime);
 
 
+                var isApptRequest = $("#PortalRowIsAppointmentRequest").val() === "true";
+                var patientIdVal = $("#PortalRowPatientId").val();
                 var requestData = {
-                    Id: appointmentId,
-                    StatusId: statusId,
-                    AppointmentStartTime: formattedDate
+                    Id: Number(appointmentId),
+                    StatusId: Number(statusId),
+                    AppointmentStartTime: formattedDate,
+                    isAppointmentRequest: isApptRequest,
+                    PatientId: patientIdVal ? Number(patientIdVal) : null
                 };
 
                 $.ajax({
@@ -2303,11 +2856,35 @@
                     contentType: "application/json",
                     data: JSON.stringify(requestData),
                     success: function (response) {
+                        if (response && response.isSuccess === false) {
+                            var ec = response.errorCode || response.ErrorCode;
+                            var em = w.portalAppointmentMessageFromJsonResult(response) || "Failed to reschedule.";
+                            if (ec === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                                $("#AptDatetime-reson").text(em).show();
+                            } else if (ec === "APPOINTMENT_TIME_REQUIRED") {
+                                $("#AptDatetime-reson").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.info(em);
+                                else alert(em);
+                            } else if (ec === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
+                                $("#AptDatetime-reson").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                            } else {
+                                alert(em);
+                            }
+                            $button.prop("disabled", false).text("Save");
+                            return;
+                        }
                         localStorage.setItem("showRescheduleSuccessMessage", "true"); // Set flag before reload
                         location.reload(); // Reload page
                     },
-                    error: function () {
-                        alert("Failed to submit reschedule request.");
+                    error: function (xhr) {
+                        portalAppointmentHandleHttpError(xhr, {
+                            $span: $("#AptDatetime-reson"),
+                            onDone: function () { $button.prop("disabled", false).text("Save"); }
+                        });
                     }
                 });
             });
@@ -2483,9 +3060,9 @@
                         $("#AptDatetimereson1").text("Invalid Appointment Date Time.");
                         isValid = false;
                     }
-                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 30 * 60 * 1000) {
-                        showError("AptDatetimereson1", "Appointment must be at least 30 minutes from now.");
-                        $("#AptDatetimereson1").text("Appointment must be at least 30 minutes from now.");
+                    else if ((enteredDateTime.getTime() - currentDateTime.getTime()) < 60 * 60 * 1000) {
+                        showError("AptDatetimereson1", "Appointment must be at least one hour from now.");
+                        $("#AptDatetimereson1").text("Appointment must be at least one hour from now.");
                         isValid = false;
                     }
                     else if (enteredDateTime.getDay() === 0) {
@@ -2520,11 +3097,35 @@
                     contentType: "application/json",
                     data: JSON.stringify(requestData),
                     success: function (response) {
+                        if (response && response.isSuccess === false) {
+                            var ec = response.errorCode || response.ErrorCode;
+                            var em = w.portalAppointmentMessageFromJsonResult(response) || "Request could not be completed.";
+                            if (ec === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                                $("#AptDatetimereson1").text(em).show();
+                            } else if (ec === "APPOINTMENT_TIME_REQUIRED") {
+                                $("#AptDatetimereson1").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.info(em);
+                                else alert(em);
+                            } else if (ec === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
+                                $("#AptDatetimereson1").text(em).show();
+                                if (typeof toastr !== "undefined") toastr.warning(em);
+                                else alert(em);
+                            } else {
+                                $("#AptDatetimereson1").text(em).show();
+                            }
+                            $button.prop("disabled", false).text("Save");
+                            return;
+                        }
                         localStorage.setItem("showSuccessMessage", "true"); // Set flag before reload
                         location.reload(); // Reload page
                     },
-                    error: function () {
-                        alert("Failed to submit reschedule request.");
+                    error: function (xhr) {
+                        portalAppointmentHandleHttpError(xhr, {
+                            $span: $("#AptDatetimereson1"),
+                            onDone: function () { $button.prop("disabled", false).text("Save"); }
+                        });
                     }
                 });
 
@@ -2590,11 +3191,11 @@
         });
 
     </script>
-    <script src="./js/jquery.min.js"></script>
-    <script src="./js/bootstrap.bundle.min.js"></script>
-    <script src="./js/custom.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/toastr.js/latest/toastr.min.js"></script>
-
+    @if (Model.ShowPortalDependentSection)
+    {
+        <script src="~/js/patient-portal-dependents.js" asp-append-version="true"></script>
+    }
 
 </body>
 </html>
@@ -2633,8 +3234,12 @@
         var editButton = document.getElementById("edit-btn");
 
         editIcon.addEventListener("click", function (e) {
-            e.preventDefault(); // page reload na ho
-            editButton.click(); // Edit button click simulate
+            e.preventDefault();
+            var collapseEl = document.getElementById("patientInfoCollapse");
+            if (collapseEl && !collapseEl.classList.contains("show")) {
+                bootstrap.Collapse.getOrCreateInstance(collapseEl, { toggle: false }).show();
+            }
+            editButton.click();
         });
     });
 </script>
@@ -3110,10 +3715,10 @@
             this.excelExport({ hierarchyExportMode: "All", fileName: "Holidays.xlsx" });
         }
         if (args.item.id === 'GridLeave_resetlayout') {
-            clearFilters('GridAppointments');
+            clearFilters('GridPatientAppointments');
         }
         if (args.item.id === 'GridLeave_clearfilters') {
-            var gridObj = document.getElementById('GridAppointments').ej2_instances[0];
+            var gridObj = document.getElementById('GridPatientAppointments').ej2_instances[0];
             gridObj.searchModule.search("");
             gridObj.clearFiltering();
         }
@@ -3121,43 +3726,101 @@
     }
 
     function gridActionComplete() {
-        updateGridUserPreference('GridAppointments');
+        updateGridUserPreference('GridPatientAppointments');
     }
 </script>
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script>
+    var MOBILE_APPT_PAGE_SIZE = 15;
+    var mobileApptPageIndex = 0;
+    var mobileApptTotalCount = 0;
+
+    function formatAppointmentCardDateTime(dateString) {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'N/A';
+        let day = String(date.getDate()).padStart(2, '0');
+        let month = String(date.getMonth() + 1).padStart(2, '0');
+        let year = date.getFullYear();
+        let hours = date.getHours();
+        let minutes = String(date.getMinutes()).padStart(2, '0');
+        let seconds = String(date.getSeconds()).padStart(2, '0');
+        let ampm = hours >= 12 ? 'PM' : 'AM';
+        hours = hours % 12;
+        hours = hours ? hours : 12;
+        hours = String(hours).padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
+    }
+
+    function updateAppointmentPager() {
+        var pager = $("#appointments-pager");
+        var total = mobileApptTotalCount || 0;
+        if (total === 0 || total <= MOBILE_APPT_PAGE_SIZE) {
+            pager.addClass("d-none");
+            return;
+        }
+        pager.removeClass("d-none");
+        var totalPages = Math.ceil(total / MOBILE_APPT_PAGE_SIZE);
+        var currentPage = mobileApptPageIndex + 1;
+        $("#appt-pager-info").text("Page " + currentPage + " of " + totalPages);
+        $("#appt-pager-prev").prop("disabled", mobileApptPageIndex <= 0);
+        $("#appt-pager-next").prop("disabled", mobileApptPageIndex >= totalPages - 1);
+    }
+
     $(document).ready(function () {
         loadAppointments();
+        $(document).on("click", "#appt-pager-prev", function () {
+            if (mobileApptPageIndex > 0) {
+                loadAppointments(mobileApptPageIndex - 1);
+            }
+        });
+        $(document).on("click", "#appt-pager-next", function () {
+            var totalPages = Math.ceil(mobileApptTotalCount / MOBILE_APPT_PAGE_SIZE);
+            if (mobileApptPageIndex < totalPages - 1) {
+                loadAppointments(mobileApptPageIndex + 1);
+            }
+        });
     });
 
-    function loadAppointments() {
+    function loadAppointments(pageIndex) {
+        if (typeof pageIndex === "number" && !isNaN(pageIndex)) {
+            mobileApptPageIndex = pageIndex;
+        }
+        var skip = mobileApptPageIndex * MOBILE_APPT_PAGE_SIZE;
         $.ajax({
             url: '/Patient/Index?handler=AppointmentViewCard&id=' + '@Model.Id',
             type: 'POST',
             contentType: 'application/json',
+            data: JSON.stringify({ skip: skip, take: MOBILE_APPT_PAGE_SIZE }),
             success: function (response) {
-                console.log(response); // Debugging ke liye
-
-                var appointments = response.result;
+                mobileApptTotalCount = typeof response.count === "number" ? response.count : 0;
+                var appointments = response.result || [];
                 var container = $("#appointments-container");
                 container.empty();
 
+                if (appointments.length === 0) {
+                    updateAppointmentPager();
+                    return;
+                }
+
                 $.each(appointments, function (index, appointment) {
-                    console.log(appointment); // Check if appointment has correct data
                     var badgeClass = "";
-                    if (appointment.statusName === "Booked" || appointment.statusName === "Completed") {
+                    if (appointment.statusName === "Booked" || appointment.statusName === "Completed" || appointment.statusName === "Converted to Appt.") {
                         badgeClass = "badge-green";
-                    } else if (appointment.statusName === "Cancelled") {
+                    } else if (appointment.statusName === "Cancelled" || appointment.statusName === "Request Rejected") {
                         badgeClass = "badge-red";
                     }
-                    appointment.appointmentStartTime = formatDateTime(appointment.appointmentStartTime);
+                    var startLabel = formatAppointmentCardDateTime(appointment.appointmentStartTime);
                     var cardHtml = `
                                 <div class="ius-gridrow">
                                     <div class="ius-appbody">
                                         <div class="ius-appinfo">
                                             <input type="hidden" name="appointmentId" value="${appointment.id}">
+                                            <input type="hidden" name="portalIsAppointmentRequest" value="${appointment.isAppointmentRequest === true ? 'true' : 'false'}">
+                                            <input type="hidden" name="portalPatientId" value="${appointment.patientId != null ? appointment.patientId : (appointment.PatientId != null ? appointment.PatientId : '')}">
 
                                                         <h3>${appointment.doctorName || 'N/A'}</h3>
+                                            ${(appointment.bookedForPatientName || appointment.patientName || appointment.name) ? `<div class="text-12 text-muted mt-1">For: ${appointment.bookedForPatientName || appointment.patientName || appointment.name}</div>` : ''}
                                             <div class="ius-apptyfo">
                                                         <span class="appinfo-type">${appointment.appoinmentType || 'N/A'}</span>
                                                 <span class="appinfo-dot"></span>
@@ -3165,8 +3828,8 @@
                                         </div>
 
                                         <div class="ius-ctrls">
-                                                         ${appointment.statusName !== "Cancelled" && appointment.statusName !== "Check-In" && appointment.statusName !== "Completed" && appointment.appoinmentType !== "Dr. Sejal Online Consultation" && appointment.appoinmentType !== "Appointment Request for Procedures" ? `
-                                                <a href="#schedulerModal" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#schedulerModal">
+                                                         ${appointment.statusName !== "Cancelled" && appointment.statusName !== "Check-In" && appointment.statusName !== "Completed" && appointment.statusName !== "Converted to Appt." && appointment.statusName !== "Request Rejected" && appointment.appoinmentType !== "Dr. Sejal Online Consultation" && appointment.appoinmentType !== "Appointment Request for Procedures" ? `
+                                                <a href="#appointmentSlotModal" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#appointmentSlotModal">
                                                          <img loading="lazy" src="@Url.Content("~/assets/calendar.svg")" width="18" height="20" alt="Calendar">
 
                                             </a>
@@ -3181,7 +3844,7 @@
                                     <div class="ius-foo">
                                         <div class="ius-datetime">
                                             <div class="datetime-label text-sb">Date & Time</div>
-                                                    <div>${appointment.appointmentStartTime || 'N/A'}</div>
+                                                    <div>${startLabel || 'N/A'}</div>
                                         </div>
                                         <div class="ius-status">
                                              <div class="ius-badge ${badgeClass}">${appointment.statusName || 'N/A'}</div>
@@ -3191,31 +3854,12 @@
                             `;
                     container.append(cardHtml);
                 });
+                updateAppointmentPager();
             },
             error: function (xhr, status, error) {
                 console.error("Error fetching appointments: ", error);
             }
         });
-        function formatDateTime(dateString) {
-            if (!dateString) return 'N/A';
-            const date = new Date(dateString);
-
-            if (isNaN(date.getTime())) return 'N/A';
-
-            let day = String(date.getDate()).padStart(2, '0');
-            let month = String(date.getMonth() + 1).padStart(2, '0'); // Month zero-based hota hai
-            let year = date.getFullYear();
-            let hours = date.getHours();
-            let minutes = String(date.getMinutes()).padStart(2, '0');
-            let seconds = String(date.getSeconds()).padStart(2, '0');
-            let ampm = hours >= 12 ? 'PM' : 'AM';
-
-            hours = hours % 12;
-            hours = hours ? hours : 12; // 0 ko 12 mein convert karna
-            hours = String(hours).padStart(2, '0');
-
-            return `${day}/${month}/${year} ${hours}:${minutes}:${seconds} ${ampm}`;
-        }
     }
 
 </script>
@@ -3225,18 +3869,62 @@
         color: black !important;
     }
 
-    .holiday-cell {
-        background-color: #e9ecef !important; /* Light red */
-        color: #721c24 !important;
-        pointer-events: none; /* Disable clicks */
-        opacity: 0.6; /* Make it look inactive */
+    /* Doctor Schedule modals: same flex height chain as /Appointment so the time grid is not collapsed (events were falling into the all-day row). */
+    #schedulerModal2.modal .modal-dialog.modal-fullscreen {
+        height: 100vh;
+        max-height: 100vh;
     }
 
-    .doctor-leave-cell {
-        background-color: #e9ecef !important; /* Light red */
-        color: #721c24 !important;
-        pointer-events: none; /* Disable clicks */
-        opacity: 0.6; /* Make it look inactive */
+    #schedulerModal2 .modal-content {
+        min-height: 100vh;
+        height: 100%;
+    }
+
+    #schedulerModal2 .modal-header {
+        flex-shrink: 0;
+    }
+
+    #schedulerModal2 .modal-body {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow: hidden;
+    }
+
+    #schedulerModal2 .appointment-schedule-modal-wrap {
+        height: calc(100vh - 56px);
+        min-height: calc(100vh - 56px);
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #schedulerModal2 .schedule-wrapper-modal {
+        flex: 1 1 auto;
+        min-height: 0;
+        width: 100%;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #schedulerModal2 .appointment-schedule-modal-wrap .e-schedule {
+        flex: 1 1 auto;
+        min-height: 0;
+    }
+
+    #schedulerModal2 .holiday-cell {
+        background: linear-gradient(180deg, #eceef1 0%, #dee2e6 50%, #d8dce0 100%) !important;
+        color: #495057 !important;
+        pointer-events: none;
+        opacity: 1 !important;
+        box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.05);
+    }
+
+    #schedulerModal2 .doctor-leave-cell {
+        background: linear-gradient(180deg, #f4f6f8 0%, #e9ecef 45%, #e3e7eb 100%) !important;
+        color: #495057 !important;
+        pointer-events: none;
+        opacity: 1 !important;
+        box-shadow: inset 0 0 0 1px rgba(0, 97, 171, 0.06);
     }
 
     .form-control:disabled, .form-control[readonly] {
@@ -3268,6 +3956,31 @@
         color: white !important;
         text-align: center;
         font-weight: bold;
+    }
+
+    #schedulerModal2 .appointment-schedule-modal-wrap .blocked-slot {
+        background-color: #7AB6E0;
+        color: #fff;
+        text-align: center;
+        font-weight: 600;
+        padding: 5px 6px;
+        border-radius: 4px;
+        box-sizing: border-box;
+        min-height: 100%;
+        width: 100%;
+        line-height: 1.25;
+    }
+
+    #schedulerModal2 .appointment-schedule-modal-wrap .e-schedule .e-hide-childs > * {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        min-height: 100% !important;
+        height: 100% !important;
+    }
+
+    #schedulerModal2 .appointment-schedule-modal-wrap .e-appointment.e-read-only {
+        background: transparent !important;
     }
 
     .e-appointment.blocked-slot2 {
@@ -3325,6 +4038,21 @@
 
     .e-appointment.e-read-only {
         background: none !important;
+    }
+
+    /* Counter global background:none + display:contents so slot picker modals show busy fill + label (same as /Appointment). */
+    #appointmentSlotModal .e-appointment.e-read-only,
+    #schedulerModal2 .e-appointment.e-read-only {
+        background: transparent !important;
+    }
+
+    #appointmentSlotModal .e-schedule .e-hide-childs > *,
+    #schedulerModal2 .e-schedule .e-hide-childs > * {
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: stretch !important;
+        min-height: 100% !important;
+        height: 100% !important;
     }
 
     .e-quick-popup-wrapper.e-lib.e-popup.e-control.e-popup-open {

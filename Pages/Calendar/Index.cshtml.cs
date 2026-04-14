@@ -8,6 +8,10 @@ namespace Patientportal.Pages.Calendar
     [IgnoreAntiforgeryToken(Order = 2000)]
     public class IndexModel : PageModel
     {
+        [FromQuery(Name = "fromPatient")]
+        public string? FromPatient { get; set; }
+
+        public bool ReturnToPatientPortalBooking => string.Equals(FromPatient, "1", StringComparison.Ordinal);
         private readonly ILogger<IndexModel> _logger;
         //private readonly HttpClient _httpClient;
         private readonly HttpClient _httpClient;
@@ -35,7 +39,9 @@ namespace Patientportal.Pages.Calendar
             string apiUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
             string apileavlist = $"{baseUrl}/api/v1/Holiday/getLeaveList";
-            Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>();
+            Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>())
+                .Where(a => a.BlocksDoctorScheduleSlot())
+                .ToList();
             Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl, token) ?? new List<Holidays>();
             Leaves = await _apiService.GetAsync<List<Leave>>(apileavlist, token) ?? new List<Leave>();
             //foreach (var appointment in Doctorblocktime)
@@ -65,7 +71,9 @@ namespace Patientportal.Pages.Calendar
 
             string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
             
-            Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>();
+            Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>())
+                .Where(a => a.BlocksDoctorScheduleSlot())
+                .ToList();
             //if (Doctorblocktime != null && Doctorblocktime.Count > 0)
             //{
             //    foreach (var appointment in Doctorblocktime)

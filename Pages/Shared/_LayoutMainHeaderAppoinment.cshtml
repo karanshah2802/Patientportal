@@ -1,7 +1,18 @@
-﻿
+﻿@using System.Linq
+@using System.Security.Claims
+@{
+    var encryptedPatientIdForHome = User.Claims.FirstOrDefault(c => c.Type == PatientPortalClaimTypes.EncryptedPatientId)?.Value;
+}
 <header class="ius-header bg-white">
     <div class="hcol hcol-logo">
-        <a href="./" title="Inurskin"><img src="~/assets/inurskin-logo.svg" width="112" height="41" alt="Inurskin Logo"></a>
+        @if (!string.IsNullOrEmpty(encryptedPatientIdForHome))
+        {
+            <a asp-page="/Patient/Index" asp-route-id="@encryptedPatientIdForHome" title="Patient Portal"><img src="~/assets/inurskin-logo.svg" width="112" height="41" alt="Inurskin Logo"></a>
+        }
+        else
+        {
+            <a href="./" title="Inurskin"><img src="~/assets/inurskin-logo.svg" width="112" height="41" alt="Inurskin Logo"></a>
+        }
     </div>
     <div class="hcol hcol-pa text-bd text-12">
         <div class="pa-row">

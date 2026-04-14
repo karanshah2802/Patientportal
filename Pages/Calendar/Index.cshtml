@@ -132,19 +132,37 @@
     });
 </script>
 
+<script>
+    (function (w) {
+        if (w.portalValidateAppointmentSlotClickTime) return;
+        w.portalNotifySlotPick = function (msg) {
+            if (typeof toastr !== "undefined") toastr.warning(msg);
+            else alert(msg);
+        };
+        w.portalValidateAppointmentSlotClickTime = function (clickedDateTime) {
+            var now = new Date();
+            if (clickedDateTime < now) {
+                w.portalNotifySlotPick("This time is in the past. Please choose a future date and time.");
+                return false;
+            }
+            if (clickedDateTime.getTime() - now.getTime() < 60 * 60 * 1000) {
+                w.portalNotifySlotPick("Appointment must be at least one hour from now.");
+                return false;
+            }
+            return true;
+        };
+    })(window);
+</script>
 
 <script>
     function onCellClick(args) {
         // Prevent default popup behavior
         args.cancel = true;
 
-        var currentDateTime = new Date(); // Current Date & Time
         var clickedDateTime = new Date(args.startTime); // Clicked Cell Date & Time
 
-        // Agar clicked datetime past hai toh click event ko rok do
-        if (clickedDateTime < currentDateTime) {
-            alert("You cannot select this time or date for appointments.");
-            return; // Stop execution (No redirect)
+        if (typeof window.portalValidateAppointmentSlotClickTime === "function") {
+            if (!window.portalValidateAppointmentSlotClickTime(clickedDateTime)) return;
         }
         var clickedDate = new Date(args.startTime);
         var day = clickedDate.getDay(); // 0 = Sunday
@@ -176,8 +194,9 @@
             ("0" + startTime.getMinutes()).slice(-2) + ":" +
             ("0" + startTime.getSeconds()).slice(-2);
 
-        // Redirect to Appointment page with local time
-        window.location.href = `/Appointment?SelectedDateTime=${formattedTime}`;
+        // Redirect to Appointment page with local time (preserve patient-portal booking flow)
+        var fromPatientSuffix = @(Model.ReturnToPatientPortalBooking ? "'&fromPatient=1'" : "''");
+        window.location.href = `/Appointment?SelectedDateTime=${formattedTime}` + fromPatientSuffix;
     }
 
 

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Http.Extensions;
 using Microsoft.AspNetCore.Mvc;
+using Patientportal;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Patientportal.AllApicall;
 using Syncfusion.EJ2.Base;
@@ -11,6 +12,8 @@ using Innovura.CSharp.Core;
 using System.ComponentModel.DataAnnotations;
 using Patientportal.Model;
 using Microsoft.AspNetCore.Authorization;
+using System.Globalization;
+using System.Security.Claims;
 
 namespace Patientportal.Pages
 {
@@ -40,13 +43,33 @@ namespace Patientportal.Pages
             _configuration = configuration;
             _opsTokenService = opsTokenService;
         }
+
+        private void BindPatientIdFromQuery()
+        {
+            var raw = Request.Query["id"].FirstOrDefault() ?? Request.Query["Id"].FirstOrDefault();
+            if (string.IsNullOrEmpty(raw))
+            {
+                Id = null;
+                return;
+            }
+            if (long.TryParse(raw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var numericId))
+            {
+                Id = numericId;
+                return;
+            }
+            try
+            {
+                Id = Convert.ToInt64(EncryptionHelper.DecryptId(raw));
+            }
+            catch
+            {
+                Id = null;
+            }
+        }
+
         public async Task<JsonResult> OnPostAppointmentView([FromBody] DataManagerRequest dm)
          {
-            var queryId = Request.Query["id"];
-            if (queryId.Any())
-            {
-                Id = Convert.ToInt64(queryId);
-            }
+            BindPatientIdFromQuery();
             if (dm == null)
             {
                 return new JsonResult(new { result = new List<object>(), count = 0 });
@@ -134,11 +157,7 @@ namespace Patientportal.Pages
 
         public async Task<JsonResult> OnPostAppointmentViewCard([FromBody] DataManagerRequest dm)
         {
-            var queryId = Request.Query["id"];
-            if (queryId.Any())
-            {
-                Id = Convert.ToInt64(queryId);
-            }
+            BindPatientIdFromQuery();
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
             string token = await _opsTokenService.GetTokenAsync();
             string apiUrl = $"{baseUrl}/api/v1/Appointment/getPatientByAppointment?id={Id}";
@@ -192,14 +211,16 @@ namespace Patientportal.Pages
 
         public async Task<IActionResult> OnGetAsync()
         {
+            BindPatientIdFromQuery();
+            if (!Id.HasValue)
+            {
+                if (User.Identity?.IsAuthenticated == true)
+                {
+                    var encryptedId = User.FindFirstValue(PatientPortalClaimTypes.EncryptedPatientId);
+                    if (!string.IsNullOrEmpty(encryptedId))
+                        return RedirectToPage("/Patient/Index", new { id = encryptedId });
+                }
 
-            var queryId = Request.Query["id"];
-            if (queryId.Any())
-            {
-                Id = Convert.ToInt64(queryId);
-            }
-            else
-            {
                 return RedirectToPage("/Account/Index"); // Ya phir Redirect("/Login");
             }
             string baseUrl = _configuration["ApiSettings:BaseUrl"];
@@ -212,7 +233,9 @@ namespace Patientportal.Pages
 
             // API Response Fetch karein
             var invoiceResponse = await _apiService.GetAsync<InvoiceResponse>(apiUrl4, token);
-            Doctorblocktime = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>();
+            Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>())
+                .Where(a => a.BlocksDoctorScheduleSlot())
+                .ToList();
             if (Doctorblocktime != null && Doctorblocktime.Count > 0)
             {
                 foreach (var appointment in Doctorblocktime)
@@ -259,8 +282,7 @@ namespace Patientportal.Pages
                 string token = await _opsTokenService.GetTokenAsync();
 
                 string apiUrl = $"{baseUrl}/api/Profile/Addpatientportalchanges";
-               
-                var apiHelper = new ApiService(_httpClient);
+
                 var response = await _apiService.PostAsync<ProfileListItem, ApiResponse>(apiUrl, viewModel, token);
 
                 if (response != null && response.IsSuccess)
@@ -287,19 +309,20 @@ namespace Patientportal.Pages
             string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/viewAppointmentButton";
-            
-            var apiHelper = new ApiService(_httpClient);
-            var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            if (response != null && response.IsSuccess)
-            {
-                return new JsonResult(new {  message = "Your change request has been submitted." });
+            var (ok, response, status, raw) =
+                await _apiService.PostAsyncWithStatus<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
-            }
-            else
+            if (ok && response != null && response.IsSuccess)
             {
-                return BadRequest("Failed to save patient details.");
+                return new JsonResult(new { message = "Your change request has been submitted." });
             }
+
+            var forwarded = ApiService.TryForwardBadRequestJson(status, raw);
+            if (forwarded != null)
+                return forwarded;
+
+            return BadRequest("Failed to save patient details.");
         } 
         public async Task<IActionResult> OnPostAddaptallAsync()
         {
@@ -311,8 +334,7 @@ namespace Patientportal.Pages
             string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/AddAppointmentbyportalAppointmentbyPatientId";
-           
-            var apiHelper = new ApiService(_httpClient);
+
             var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
             if (response != null && response.IsSuccess)
@@ -335,8 +357,7 @@ namespace Patientportal.Pages
             string token = await _opsTokenService.GetTokenAsync();
 
             string apiUrl = $"{baseUrl}/api/v1/Appointment/UpsertAppointmentRequest";
-            
-            var apiHelper = new ApiService(_httpClient);
+
             var response = await _apiService.PostAsync<AppointmentListItem, ApiResponse>(apiUrl, viewModel, token);
 
             if (response != null && response.IsSuccess)
