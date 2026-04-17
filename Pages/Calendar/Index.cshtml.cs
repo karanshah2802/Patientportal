@@ -33,17 +33,9 @@ namespace Patientportal.Pages.Calendar
         }
         public async Task OnGet()
         {
-            string baseUrl = _configuration["ApiSettings:BaseUrl"];
+            string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
             string token = await _opsTokenService.GetTokenAsync();
-
-            string apiUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
-            string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
-            string apileavlist = $"{baseUrl}/api/v1/Holiday/getLeaveList";
-            Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>())
-                .Where(a => a.BlocksDoctorScheduleSlot())
-                .ToList();
-            Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl, token) ?? new List<Holidays>();
-            Leaves = await _apiService.GetAsync<List<Leave>>(apileavlist, token) ?? new List<Leave>();
+            await LoadCalendarSchedulerDataAsync(baseUrl, token);
             //foreach (var appointment in Doctorblocktime)
             //{
             //    if (appointment.AppointmentStartTime != null)
@@ -66,14 +58,9 @@ namespace Patientportal.Pages.Calendar
         }
         public async Task OnGetCalendarAsync()
         {
-            string baseUrl = _configuration["ApiSettings:BaseUrl"];
+            string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
             string token = await _opsTokenService.GetTokenAsync();
-
-            string apiUrl2 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
-            
-            Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl2, token) ?? new List<AppointmentListItem>())
-                .Where(a => a.BlocksDoctorScheduleSlot())
-                .ToList();
+            await LoadCalendarSchedulerDataAsync(baseUrl, token);
             //if (Doctorblocktime != null && Doctorblocktime.Count > 0)
             //{
             //    foreach (var appointment in Doctorblocktime)
@@ -89,6 +76,31 @@ namespace Patientportal.Pages.Calendar
             //        }
             //    }
             //}
+        }
+
+        private async Task LoadCalendarSchedulerDataAsync(string baseUrl, string token)
+        {
+            string holidayUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
+            string blocksUrl = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
+            string leaveUrl = $"{baseUrl}/api/v1/Holiday/getLeaveList";
+            Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(blocksUrl, token) ?? new List<AppointmentListItem>())
+                .Where(a => a.BlocksDoctorScheduleSlot())
+                .ToList();
+            Holidays = await _apiService.GetAsync<List<Holidays>>(holidayUrl, token) ?? new List<Holidays>();
+            Leaves = await _apiService.GetAsync<List<Leave>>(leaveUrl, token) ?? new List<Leave>();
+        }
+
+        public async Task<IActionResult> OnGetSchedulerDataAsync()
+        {
+            string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
+            string token = await _opsTokenService.GetTokenAsync();
+            await LoadCalendarSchedulerDataAsync(baseUrl, token);
+            return new JsonResult(new
+            {
+                doctorBlocks = Doctorblocktime,
+                holidays = Holidays,
+                leaves = Leaves
+            });
         }
     }
 }

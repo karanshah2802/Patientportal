@@ -273,13 +273,67 @@ namespace Patientportal.Pages.Appointment
                     sampleDoctorIds,
                     TruncateForSchedulerLog(leavesRawBody, 4000));
             }
-            else if (Leaves.Count == 0)
+            else             if (Leaves.Count == 0)
             {
                 _logger.LogWarning(
                     "Scheduler leave list empty. HttpStatus={Status} BodySample={BodySample}",
                     (int)leavesHttpStatus,
                     TruncateForSchedulerLog(leavesRawBody, 4000));
             }
+        }
+
+        /// <summary>Fresh holidays, leaves, and doctor busy blocks for schedulers (modal open).</summary>
+        public async Task<IActionResult> OnGetSchedulerDataAsync()
+        {
+            LoggedInProfileId = 0;
+            PortalPatientProfile = null;
+            LoggedInEncryptedPatientId = null;
+
+            var encryptedId = User.FindFirstValue(PatientPortalClaimTypes.EncryptedPatientId);
+            if (User.Identity?.IsAuthenticated == true && !string.IsNullOrEmpty(encryptedId))
+            {
+                LoggedInEncryptedPatientId = encryptedId;
+                try
+                {
+                    LoggedInProfileId = Convert.ToInt64(EncryptionHelper.DecryptId(encryptedId));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "OnGetSchedulerDataAsync: could not decrypt EncryptedPatientId.");
+                    LoggedInProfileId = 0;
+                }
+            }
+
+            IsPatientPortalBooking = string.Equals(
+                Request.Cookies[PatientPortalCookies.AppointmentPortalBooking],
+                "1",
+                StringComparison.Ordinal);
+
+            if (IsPatientPortalBooking && User.Identity?.IsAuthenticated == true && !string.IsNullOrEmpty(encryptedId))
+            {
+                string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
+                string token = await _opsTokenService.GetTokenAsync();
+                try
+                {
+                    var id = LoggedInProfileId > 0
+                        ? LoggedInProfileId
+                        : Convert.ToInt64(EncryptionHelper.DecryptId(encryptedId));
+                    string apiUrl = $"{baseUrl}/api/Profile/getProfileforpatientportal?id={id}";
+                    PortalPatientProfile = await _apiService.GetProfileForPatientPortalAsync(apiUrl, token, id);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "OnGetSchedulerDataAsync: could not load portal profile.");
+                }
+            }
+
+            await LoadSchedulerDataAsync();
+            return new JsonResult(new
+            {
+                doctorBlocks = Doctorblocktime,
+                holidays = Holidays,
+                leaves = Leaves
+            });
         }
 
         private static string TruncateForSchedulerLog(string? text, int maxChars)

@@ -1104,7 +1104,11 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body d-flex flex-column flex-grow-1 p-0 overflow-hidden">
-                    <div class="appointment-schedule-modal-wrap control-section flex-grow-1">
+                    <div class="appointment-schedule-modal-wrap control-section flex-grow-1 portal-scheduler-loader-wrap">
+                        <div class="portal-scheduler-loader" id="appointmentSlotModalScheduleLoader" role="status" aria-live="polite" aria-busy="false">
+                            <div class="portal-sched-spinner" aria-hidden="true"></div>
+                            <span class="portal-scheduler-loader-text">Loading schedule…</span>
+                        </div>
                         <div class="schedule-wrapper-modal">
                             <ejs-schedule id="appointmentSlotSchedule"
                                           width="100%" height="100%"
@@ -1117,6 +1121,7 @@
                                     <e-schedule-view option="Day"></e-schedule-view>
                                     <e-schedule-view option="Week"></e-schedule-view>
                                 </e-schedule-views>
+                                <e-schedule-workhours start="10:00" end="19:15" highlight="true"></e-schedule-workhours>
                                 <e-schedule-timescale interval="15" slotCount="1"></e-schedule-timescale>
                                 @* Empty on first paint — merged blocks are applied in JS so raw API rows are not duplicated with merged events. *@
                                 <e-schedule-eventsettings dataSource="@appointmentSlotScheduleInitialData" template="#appointmentBlockTemplate"></e-schedule-eventsettings>
@@ -1246,15 +1251,14 @@
                 return list;
             }
 
-            function initAppointmentSlotSchedule() {
-                if (appointmentSlotScheduleInited) return;
-                var scheduleEl = document.getElementById('appointmentSlotSchedule');
-                if (!scheduleEl || !scheduleEl.ej2_instances || !scheduleEl.ej2_instances[0]) return;
-                appointmentSlotScheduleInited = true;
-                var scheduleObj = scheduleEl.ej2_instances[0];
-                scheduleObj.currentView = appointmentSlotScheduleDefaultView();
-                var selectedDoctorId = 1;
+            function portalAppointmentSchedulerDataUrl() {
+                var params = new URLSearchParams(window.location.search);
+                params.set('handler', 'SchedulerData');
+                return window.location.pathname + '?' + params.toString();
+            }
 
+            function paintAppointmentSlotScheduleBlocks(scheduleObj) {
+                var selectedDoctorId = 1;
                 var doctorLeaveSlots = (doctorLeaves || [])
                     .filter(function (x) { return Number(x.doctorId) === Number(selectedDoctorId); })
                     .map(function (x) {
@@ -1306,23 +1310,50 @@
                 };
 
                 scheduleObj.eventSettings.dataSource = blockAppointments;
-                scheduleObj.popupOpen = function (args) {
-                    if (args.type === 'Editor' && args.data.Id === undefined) {
-                        args.cancel = true;
-                    }
-                };
                 if (typeof scheduleObj.refreshEvents === "function") {
                     scheduleObj.refreshEvents();
                 } else {
                     scheduleObj.refresh();
                 }
+            }
+
+            function initAppointmentSlotSchedule() {
+                if (appointmentSlotScheduleInited) return;
+                var scheduleEl = document.getElementById('appointmentSlotSchedule');
+                if (!scheduleEl || !scheduleEl.ej2_instances || !scheduleEl.ej2_instances[0]) return;
+                appointmentSlotScheduleInited = true;
+                var scheduleObj = scheduleEl.ej2_instances[0];
+                scheduleObj.currentView = appointmentSlotScheduleDefaultView();
+                paintAppointmentSlotScheduleBlocks(scheduleObj);
+                scheduleObj.popupOpen = function (args) {
+                    if (args.type === 'Editor' && args.data.Id === undefined) {
+                        args.cancel = true;
+                    }
+                };
 
                 var slotModalEl = document.getElementById('appointmentSlotModal');
                 if (slotModalEl) {
                     slotModalEl.addEventListener('shown.bs.modal', function () {
+                        var loader = document.getElementById('appointmentSlotModalScheduleLoader');
+                        function showSchedLoader() {
+                            if (loader) {
+                                loader.classList.add('is-active');
+                                loader.setAttribute('aria-busy', 'true');
+                            }
+                        }
+                        function hideSchedLoader() {
+                            if (loader) {
+                                loader.classList.remove('is-active');
+                                loader.setAttribute('aria-busy', 'false');
+                            }
+                        }
+
                         var el = document.getElementById('appointmentSlotSchedule');
-                        if (el && el.ej2_instances && el.ej2_instances[0]) {
-                            var inst = el.ej2_instances[0];
+                        if (!el || !el.ej2_instances || !el.ej2_instances[0]) return;
+                        var inst = el.ej2_instances[0];
+                        showSchedLoader();
+
+                        function finishLayout(onDone) {
                             inst.currentView = appointmentSlotScheduleDefaultView();
                             if (window.__patientRescheduleSchedulerAnchorDate) {
                                 inst.selectedDate = new Date(window.__patientRescheduleSchedulerAnchorDate);
@@ -1330,9 +1361,32 @@
                             }
                             inst.refresh();
                             if (typeof inst.refreshLayout === 'function') {
-                                setTimeout(function () { inst.refreshLayout(); }, 100);
+                                setTimeout(function () {
+                                    inst.refreshLayout();
+                                    if (onDone) {
+                                        setTimeout(onDone, 60);
+                                    }
+                                }, 100);
+                            } else if (onDone) {
+                                setTimeout(onDone, 80);
                             }
                         }
+
+                        fetch(portalAppointmentSchedulerDataUrl(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+                            .then(function (data) {
+                                doctorBlockTimes = data.doctorBlocks || [];
+                                holidays = data.holidays || [];
+                                doctorLeaves = data.leaves || [];
+                                paintAppointmentSlotScheduleBlocks(inst);
+                                finishLayout(hideSchedLoader);
+                            })
+                            .catch(function () {
+                                finishLayout(hideSchedLoader);
+                            });
+                    });
+                    slotModalEl.addEventListener('hidden.bs.modal', function () {
+                        hideSchedLoader();
                     });
                 }
             }
@@ -2213,8 +2267,11 @@ function validateAge(input) {
             var $span = opts.$span;
             var onDone = opts.onDone;
             function finish() { if (typeof onDone === "function") onDone(); }
+            function clearInline() {
+                if ($span && $span.length) $span.text("");
+            }
             function showGeneric(msg) {
-                if ($span && $span.length) $span.text(msg).show();
+                clearInline();
                 if (typeof toastr !== "undefined") toastr.error(msg);
                 else alert(msg);
                 finish();
@@ -2233,21 +2290,21 @@ function validateAge(input) {
                 || (xhr.responseText && xhr.responseText.length < 400 ? String(xhr.responseText).trim() : null)
                 || "Request could not be completed.";
             if (code === "APPOINTMENT_MINIMUM_LEAD_TIME") {
+                clearInline();
                 if (typeof toastr !== "undefined") toastr.warning(text);
                 else alert(text);
-                if ($span && $span.length) $span.text(text).show();
                 finish();
                 return;
             }
             if (code === "APPOINTMENT_TIME_REQUIRED") {
-                if ($span && $span.length) $span.text(text).show();
+                clearInline();
                 if (typeof toastr !== "undefined") toastr.info(text);
                 else alert(text);
                 finish();
                 return;
             }
             if (code === "PATIENT_PORTAL_RESCHEDULE_LIMIT_REACHED") {
-                if ($span && $span.length) $span.text(text).show();
+                clearInline();
                 if (typeof toastr !== "undefined") toastr.warning(text);
                 else alert(text);
                 finish();

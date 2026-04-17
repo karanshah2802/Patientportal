@@ -8,21 +8,26 @@
 <link rel="stylesheet" href="~/css/bootstrap.min.css">
 <link rel="stylesheet" href="~/css/custom.css">
 <script>
-    document.addEventListener("DOMContentLoaded", function () {
-        var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
-        var holidays = @Html.Raw(Json.Serialize(Model.Holidays));
-        var doctorLeaves = @Html.Raw(Json.Serialize(Model.Leaves)); // <-- ADD THIS
+    function portalCalendarSchedulerDataUrl() {
+        var params = new URLSearchParams(window.location.search);
+        params.set('handler', 'SchedulerData');
+        return window.location.pathname + '?' + params.toString();
+    }
+
+    function applyCalendarPageSchedule(doctorBlockTimes, holidays, doctorLeaves) {
+        doctorBlockTimes = doctorBlockTimes || [];
+        holidays = holidays || [];
+        doctorLeaves = doctorLeaves || [];
+        var scheduleObj = document.getElementById('schedule')?.ej2_instances?.[0];
+        if (!scheduleObj) return;
 
         var selectedDoctorId = 1;
         var holidayDates = holidays.map(function (item) {
-            var d = new Date(item.startDate);
-            return d.getFullYear() + "-" +
-                String(d.getMonth() + 1).padStart(2, '0') + "-" +
-                String(d.getDate()).padStart(2, '0');
+            return new Date(item.startDate).toISOString().split('T')[0];
         });
 
         var doctorLeaveSlots = doctorLeaves
-            .filter(x => x.doctorId === selectedDoctorId)
+            .filter(function (x) { return x.doctorId === selectedDoctorId; })
             .map(function (x) {
                 return {
                     start: new Date(x.startDateTime),
@@ -30,39 +35,26 @@
                 };
             });
 
-        console.log("Holiday Dates:", holidayDates);
-        console.log("Doctor Leave Slots:", doctorLeaveSlots);
-        // Make leave slots globally available for click blocking
         window.calendarDoctorLeaveSlots = doctorLeaveSlots;
 
-        if (doctorBlockTimes.length === 0) {
-            console.log("No blocked appointments found.");
-        } else {
-            console.log("Blocked Appointments:", doctorBlockTimes);
-        }
-        var holidayDates = holidays.map(function (item) {
-            return new Date(item.startDate).toISOString().split('T')[0]; // Convert to YYYY-MM-DD
-        });
-        var scheduleObj = document.getElementById('schedule').ej2_instances[0];
-
-        // Convert data to Scheduler format
         var blockAppointments = doctorBlockTimes.map(function (item) {
+            var s = item.procedureScheduleDateTime != null ? item.procedureScheduleDateTime : item.ProcedureScheduleDateTime;
+            var e = item.procedureScheduleEndDateTime != null ? item.procedureScheduleEndDateTime : item.ProcedureScheduleEndDateTime;
             return {
                 Id: item.id,
-                Subject:'Not available', // Change subject
-                StartTime: new Date(item.procedureScheduleDateTime),
-                EndTime: new Date(item.procedureScheduleEndDateTime),
-                IsReadonly: true,
+                Subject: 'Not available',
+                StartTime: new Date(s),
+                EndTime: new Date(e),
+                IsReadonly: true
             };
         });
+
         scheduleObj.renderCell = function (args) {
             if (args.elementType === "workCells" || args.elementType === "monthCells") {
-                var cellDate = args.date.toISOString().split('T')[0]; // Get YYYY-MM-DD format
+                var cellDate = args.date.toISOString().split('T')[0];
                 if (holidayDates.includes(cellDate)) {
-                    args.element.classList.add("e-disabled", "holiday-cell"); // Holiday: full-day gray
+                    args.element.classList.add("e-disabled", "holiday-cell");
                 }
-
-                // Doctor 1 leave: gray only for slots between start & end
                 if (Array.isArray(window.calendarDoctorLeaveSlots)) {
                     var inLeave = window.calendarDoctorLeaveSlots.some(function (slot) {
                         return args.date >= slot.start && args.date < slot.end;
@@ -73,7 +65,7 @@
                 }
             }
         };
-        // Block only leave time range (Doctor 1)
+
         doctorLeaveSlots.forEach(function (slot) {
             blockAppointments.push({
                 Id: "LV-" + slot.start.toISOString(),
@@ -81,19 +73,82 @@
                 StartTime: slot.start,
                 EndTime: slot.end,
                 IsReadonly: true,
-                CategoryColor: "#ff0000"  // Red color for leave block
+                CategoryColor: "#ff0000"
             });
         });
-        // Debugging output
-        console.log("Final Event Data for Scheduler:", blockAppointments);
 
-        // Set the scheduler events
+        scheduleObj.popupOpen = function (args) {
+            if (args.type === "Editor" && args.data.Id === undefined) {
+                args.cancel = true;
+            }
+        };
+
         scheduleObj.eventSettings.dataSource = blockAppointments;
-         scheduleObj.refresh();
+        scheduleObj.refresh();
+    }
+
+    function tryInitCalendarFromApi(attempt) {
+        attempt = attempt || 0;
+        var loader = document.getElementById('calendarPageScheduleLoader');
+        var scheduleObj = document.getElementById('schedule')?.ej2_instances?.[0];
+        if (!scheduleObj) {
+            if (attempt < 100) {
+                setTimeout(function () { tryInitCalendarFromApi(attempt + 1); }, 80);
+            } else if (loader) {
+                loader.classList.remove('is-active');
+                loader.setAttribute('aria-busy', 'false');
+            }
+            return;
+        }
+
+        function hideCalendarLoader() {
+            if (loader) {
+                loader.classList.remove('is-active');
+                loader.setAttribute('aria-busy', 'false');
+            }
+        }
+
+        if (loader) {
+            loader.classList.add('is-active');
+            loader.setAttribute('aria-busy', 'true');
+        }
+
+        fetch(portalCalendarSchedulerDataUrl(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+            .then(function (data) {
+                applyCalendarPageSchedule(data.doctorBlocks, data.holidays, data.leaves);
+                if (scheduleObj && typeof scheduleObj.refreshLayout === 'function') {
+                    scheduleObj.refreshLayout();
+                }
+                setTimeout(hideCalendarLoader, 100);
+            })
+            .catch(function () {
+                applyCalendarPageSchedule(
+                    @Html.Raw(Json.Serialize(Model.Doctorblocktime)),
+                    @Html.Raw(Json.Serialize(Model.Holidays)),
+                    @Html.Raw(Json.Serialize(Model.Leaves)));
+                if (scheduleObj && typeof scheduleObj.refreshLayout === 'function') {
+                    scheduleObj.refreshLayout();
+                }
+                setTimeout(hideCalendarLoader, 100);
+            });
+    }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        tryInitCalendarFromApi(0);
+    });
+
+    window.addEventListener('pageshow', function (ev) {
+        if (!ev.persisted) return;
+        tryInitCalendarFromApi(0);
     });
 </script>
 
-<div class="control-section full-screen-schedule">
+<div class="control-section full-screen-schedule portal-scheduler-loader-wrap">
+    <div class="portal-scheduler-loader" id="calendarPageScheduleLoader" role="status" aria-live="polite" aria-busy="false">
+        <div class="portal-sched-spinner" aria-hidden="true"></div>
+        <span class="portal-scheduler-loader-text">Loading schedule…</span>
+    </div>
     <div class="schedule-wrapper">
         <ejs-schedule id="schedule"
                       width="100%" height="100%"
@@ -120,18 +175,6 @@
         }
     }
 </script>
-<script>
-    document.addEventListener('DOMContentLoaded', function () {
-        var scheduleObj = document.getElementById('schedule').ej2_instances[0];
-
-        scheduleObj.popupOpen = function (args) {
-            if (args.type === "Editor" && args.data.Id === undefined) {
-                args.cancel = true; // Disable double-click popup (event creation popup)
-            }
-        };
-    });
-</script>
-
 <script>
     (function (w) {
         if (w.portalValidateAppointmentSlotClickTime) return;

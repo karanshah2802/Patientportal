@@ -420,10 +420,7 @@ namespace Patientportal.Pages.Patient
             string apiUrl = $"{baseUrl}/api/Profile/getProfileforpatientportal?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/Profile/getDetailsChangesbyId?id={Id}";
 
-            string apiUrl3 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsPortalByDoctor?id={Id}";
             string apiUrl4 = $"{baseUrl}/api/v1/Appointment/GetInvoiceAmount?id={Id}";
-            string apiUrl5 = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
-            string apileavlist = $"{baseUrl}/api/v1/Holiday/getLeaveList";
             string apiUrl6 = $"{baseUrl}/api/v1/CountryStateCity/GetCountry";
             string token1 = "yJhbGciOiJIUzUxMiIsInR5cCI6IkpXVCJ9.eyJuYW1laWQiOiIyIiwic3ViIjoiMiIsInVuaXF1ZV9uYW1lIjoiSmFscGEiLCJlbWFpbCI6ImphbHBhQGludXJza24uaW4iLCJyb2xlIjoiRnJvbnREZXNrUHJlU2FsZXMiLCJuYmYiOjE3NTA0MDE5ODUsImV4cCI6MTc1MTAwNjc4NSwiaWF0IjoxNzUwNDAxOTg1LCJpc3MiOiJDb25uZXR3ZWxsQ0lTIiwiYXVkIjoiQ29ubmV0d2VsbENJUyJ9.xS0iiGb41T-V0kx0OXK2oOMAO5B_a-thQFx-bfHruOMp8QQUuEGqHPY04ZzjVBSJceZQq5qmokgFNbkotSSrOw";
             string apiUrl7 = $"{baseUrl}/api/v1/Pincode/getallpincode";
@@ -431,39 +428,7 @@ namespace Patientportal.Pages.Patient
 
             // API Response Fetch karein
             var invoiceResponse = await _apiService.GetAsync<InvoiceResponse>(apiUrl4, token);
-            var schedulerBlocksRaw = await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>();
-            Doctorblocktime = schedulerBlocksRaw.Where(a => a.BlocksDoctorScheduleSlot()).ToList();
-            Holidays = await _apiService.GetAsync<List<Holidays>>(apiUrl5, token) ?? new List<Holidays>();
-            Leaves = await _apiService.GetAsync<List<Leave>>(apileavlist, token) ?? new List<Leave>();
-            var leavesDoctor1 = Leaves.Count(l => l.DoctorId == 1);
-            _logger.LogInformation(
-                "Patient page scheduler load: GetAppointmentsPortalByDoctor url={BlocksUrl} rawRowCount={RawCount} afterBlocksDoctorScheduleSlot={FilteredCount}; getHolidaysList count={HolidayCount}; getLeaveList total={LeaveCount} doctorId1={LeaveDoctor1Count}",
-                apiUrl3,
-                schedulerBlocksRaw.Count,
-                Doctorblocktime.Count,
-                Holidays.Count,
-                Leaves.Count,
-                leavesDoctor1);
-            if (Doctorblocktime.Count == 0 && schedulerBlocksRaw.Count > 0)
-            {
-                _logger.LogWarning(
-                    "Patient scheduler: API returned {RawCount} rows but none passed BlocksDoctorScheduleSlot() — UI may show no busy blocks.",
-                    schedulerBlocksRaw.Count);
-            }
-            else if (schedulerBlocksRaw.Count == 0)
-            {
-                _logger.LogWarning(
-                    "Patient scheduler: GetAppointmentsPortalByDoctor returned no rows for profileId={ProfileId}.",
-                    Id);
-            }
-
-            if (Leaves.Count > 0 && leavesDoctor1 == 0)
-            {
-                var sample = string.Join(", ", Leaves.Take(8).Select(l => l.DoctorId?.ToString() ?? "null"));
-                _logger.LogWarning(
-                    "Patient scheduler: no leave rows with DoctorId=1; sample DoctorId (first 8)=[{Sample}]",
-                    sample);
-            }
+            await LoadPatientSchedulerDataAsync(baseUrl, token);
             CountryLists = await _apiService.GetAsync<List<Country>>(apiUrl6, token) ?? new List<Country>();
             Pincodes = await _apiService.GetAsync<List<Pincode>>(apiUrl7, token1) ?? new List<Pincode>();
             //if (Doctorblocktime != null && Doctorblocktime.Count > 0 )
@@ -539,6 +504,77 @@ namespace Patientportal.Pages.Patient
             }
 
             return Page();
+        }
+
+        private async Task LoadPatientSchedulerDataAsync(string baseUrl, string token)
+        {
+            if (!Id.HasValue || Id.Value <= 0)
+            {
+                Doctorblocktime = new List<AppointmentListItem>();
+                Holidays = new List<Holidays>();
+                Leaves = new List<Leave>();
+                return;
+            }
+
+            string blocksUrl = $"{baseUrl}/api/v1/Appointment/GetAppointmentsPortalByDoctor?id={Id}";
+            string holidayUrl = $"{baseUrl}/api/v1/Holiday/getHolidaysList";
+            string leaveUrl = $"{baseUrl}/api/v1/Holiday/getLeaveList";
+
+            var schedulerBlocksRaw = await _apiService.GetAsync<List<AppointmentListItem>>(blocksUrl, token) ?? new List<AppointmentListItem>();
+            Doctorblocktime = schedulerBlocksRaw.Where(a => a.BlocksDoctorScheduleSlot()).ToList();
+            Holidays = await _apiService.GetAsync<List<Holidays>>(holidayUrl, token) ?? new List<Holidays>();
+            Leaves = await _apiService.GetAsync<List<Leave>>(leaveUrl, token) ?? new List<Leave>();
+            var leavesDoctor1 = Leaves.Count(l => l.DoctorId == 1);
+            _logger.LogInformation(
+                "Patient page scheduler load: GetAppointmentsPortalByDoctor url={BlocksUrl} rawRowCount={RawCount} afterBlocksDoctorScheduleSlot={FilteredCount}; getHolidaysList count={HolidayCount}; getLeaveList total={LeaveCount} doctorId1={LeaveDoctor1Count}",
+                blocksUrl,
+                schedulerBlocksRaw.Count,
+                Doctorblocktime.Count,
+                Holidays.Count,
+                Leaves.Count,
+                leavesDoctor1);
+            if (Doctorblocktime.Count == 0 && schedulerBlocksRaw.Count > 0)
+            {
+                _logger.LogWarning(
+                    "Patient scheduler: API returned {RawCount} rows but none passed BlocksDoctorScheduleSlot() — UI may show no busy blocks.",
+                    schedulerBlocksRaw.Count);
+            }
+            else if (schedulerBlocksRaw.Count == 0)
+            {
+                _logger.LogWarning(
+                    "Patient scheduler: GetAppointmentsPortalByDoctor returned no rows for profileId={ProfileId}.",
+                    Id);
+            }
+
+            if (Leaves.Count > 0 && leavesDoctor1 == 0)
+            {
+                var sample = string.Join(", ", Leaves.Take(8).Select(l => l.DoctorId?.ToString() ?? "null"));
+                _logger.LogWarning(
+                    "Patient scheduler: no leave rows with DoctorId=1; sample DoctorId (first 8)=[{Sample}]",
+                    sample);
+            }
+        }
+
+        public async Task<IActionResult> OnGetSchedulerDataAsync()
+        {
+            var queryId = Request.Query["id"];
+            if (queryId.Any())
+                Id = Convert.ToInt64(EncryptionHelper.DecryptId(queryId));
+            else
+                BindPatientIdFromRequest();
+
+            if (!Id.HasValue || Id.Value <= 0)
+                return new JsonResult(new { error = "Invalid patient id." }) { StatusCode = 400 };
+
+            string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
+            string token = await _opsTokenService.GetTokenAsync();
+            await LoadPatientSchedulerDataAsync(baseUrl, token);
+            return new JsonResult(new
+            {
+                doctorBlocks = Doctorblocktime,
+                holidays = Holidays,
+                leaves = Leaves
+            });
         }
 
         private static List<PatientRelationshipPortalItem> NormalizeRelationshipOptions(List<PatientRelationshipPortalItem>? raw)

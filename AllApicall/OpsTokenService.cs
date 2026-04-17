@@ -5,8 +5,8 @@ namespace Patientportal.AllApicall
 {
     /// <summary>
     /// Service for OPS API token management with auto-refresh support.
-    /// If Username/Password provided, calls login API to refresh token before expiry.
-    /// Otherwise uses static AuthToken from config (manual update still required).
+    /// Token refresh: <c>portal-login</c> (service account email/password),
+    /// <c>verify-otp</c> (mobile/otp), legacy username/password JSON, or static <c>AuthToken</c>.
     /// </summary>
     public class OpsTokenService : IDisposable
     {
@@ -26,7 +26,7 @@ namespace Patientportal.AllApicall
         }
 
         /// <summary>
-        /// Returns a valid OPS API token. Refreshes automatically via Login or verify-otp API when token is expiring.
+        /// Returns a valid OPS API token. Refreshes via portal-login, verify-otp, or legacy login when token is expiring.
         /// </summary>
         public async Task<string> GetTokenAsync(CancellationToken cancellationToken = default)
         {
@@ -34,19 +34,28 @@ namespace Patientportal.AllApicall
             var password = _configuration["ApiSettings:Password"];
             var mobile = _configuration["ApiSettings:Mobile"];
             var otp = _configuration["ApiSettings:Otp"];
+            var serviceEmail = _configuration["ApiSettings:ServiceAccountEmail"];
+            var servicePassword = _configuration["ApiSettings:ServiceAccountPassword"];
             var staticToken = _configuration["ApiSettings:AuthToken"];
             var loginPath = _configuration["ApiSettings:LoginPath"] ?? "/api/v1/Account/verify-otp";
 
+            var usePortalLogin = loginPath.IndexOf("portal-login", StringComparison.OrdinalIgnoreCase) >= 0;
+            var hasPortalLoginCreds = usePortalLogin && !string.IsNullOrEmpty(serviceEmail) && !string.IsNullOrEmpty(servicePassword);
             var useVerifyOtp = loginPath.IndexOf("verify-otp", StringComparison.OrdinalIgnoreCase) >= 0;
             var hasVerifyOtpCreds = useVerifyOtp && !string.IsNullOrEmpty(mobile) && !string.IsNullOrEmpty(otp);
             var hasLoginCreds = !string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(password);
+            var canRefreshToken = hasPortalLoginCreds
+                || hasVerifyOtpCreds
+                || (hasLoginCreds && !usePortalLogin && !useVerifyOtp);
 
             // No credentials for token refresh - use static token from config
-            if (!hasLoginCreds && !hasVerifyOtpCreds)
+            if (!canRefreshToken)
             {
                 if (!string.IsNullOrEmpty(staticToken))
                     return staticToken;
-                throw new InvalidOperationException("Configure ApiSettings:Username/Password, or ApiSettings:Mobile/Otp with LoginPath verify-otp, or ApiSettings:AuthToken.");
+                throw new InvalidOperationException(
+                    "Configure ApiSettings:ServiceAccountEmail/ServiceAccountPassword with LoginPath portal-login, " +
+                    "or Username/Password, or Mobile/Otp with LoginPath verify-otp, or ApiSettings:AuthToken.");
             }
 
             // Check if cached token is still valid (refresh 5 minutes before expiry)
@@ -64,18 +73,39 @@ namespace Patientportal.AllApicall
                     return _cachedToken;
 
                 var baseUrl = _configuration["ApiSettings:BaseUrl"]?.TrimEnd('/') ?? "";
-                var loginUrl = $"{baseUrl}{loginPath}";
+                var path = loginPath.StartsWith("/") ? loginPath : "/" + loginPath;
+                var loginUrl = $"{baseUrl}{path}";
 
                 string jsonBody;
-                if (useVerifyOtp && hasVerifyOtpCreds)
+                bool redactBodyInLogs;
+                if (hasPortalLoginCreds)
+                {
+                    jsonBody = JsonSerializer.Serialize(new
+                    {
+                        email = serviceEmail!.Trim(),
+                        password = servicePassword
+                    });
+                    redactBodyInLogs = true;
+                    _logger.LogInformation("Refreshing OPS API token via portal-login");
+                }
+                else if (useVerifyOtp && hasVerifyOtpCreds)
                 {
                     jsonBody = JsonSerializer.Serialize(new { mobile = mobile!.Trim(), otp = otp!.Trim() });
+                    redactBodyInLogs = false;
                     _logger.LogInformation("Refreshing OPS API token via verify-otp");
+                }
+                else if (hasLoginCreds && !usePortalLogin && !useVerifyOtp)
+                {
+                    jsonBody = JsonSerializer.Serialize(new { userName = username, password = password });
+                    redactBodyInLogs = true;
+                    _logger.LogInformation("Refreshing OPS API token via legacy login");
                 }
                 else
                 {
-                    jsonBody = JsonSerializer.Serialize(new { userName = username, password = password });
-                    _logger.LogInformation("Refreshing OPS API token via login");
+                    if (!string.IsNullOrEmpty(staticToken))
+                        return staticToken;
+                    throw new InvalidOperationException(
+                        $"LoginPath '{loginPath}' does not match configured credentials (portal-login vs verify-otp vs legacy).");
                 }
 
                 var content = new StringContent(jsonBody, Encoding.UTF8, "application/json");
@@ -84,11 +114,12 @@ namespace Patientportal.AllApicall
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorBody = await response.Content.ReadAsStringAsync(cancellationToken);
+                    var bodyForLog = redactBodyInLogs ? "(redacted)" : jsonBody;
                     _logger.LogWarning(
                         "OPS token refresh failed ({StatusCode}). Url={Url}. Body={Body}. Response={Response}",
                         response.StatusCode,
                         loginUrl,
-                        jsonBody,
+                        bodyForLog,
                         errorBody
                     );
                     if (!string.IsNullOrEmpty(staticToken))

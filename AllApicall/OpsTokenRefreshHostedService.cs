@@ -30,11 +30,18 @@ namespace Patientportal.AllApicall
                     var password = config["ApiSettings:Password"];
                     var mobile = config["ApiSettings:Mobile"];
                     var otp = config["ApiSettings:Otp"];
+                    var serviceEmail = config["ApiSettings:ServiceAccountEmail"];
+                    var servicePassword = config["ApiSettings:ServiceAccountPassword"];
                     var loginPath = config["ApiSettings:LoginPath"] ?? "";
+                    var usePortalLogin = loginPath.IndexOf("portal-login", StringComparison.OrdinalIgnoreCase) >= 0;
                     var useVerifyOtp = loginPath.IndexOf("verify-otp", StringComparison.OrdinalIgnoreCase) >= 0;
+                    var hasPortalLogin = usePortalLogin && !string.IsNullOrEmpty(serviceEmail) && !string.IsNullOrEmpty(servicePassword);
                     var hasLogin = !string.IsNullOrEmpty(username) && !string.IsNullOrEmpty(password);
                     var hasVerifyOtp = useVerifyOtp && !string.IsNullOrEmpty(mobile) && !string.IsNullOrEmpty(otp);
-                    if (hasLogin || hasVerifyOtp)
+                    var canRefresh = hasPortalLogin
+                        || hasVerifyOtp
+                        || (hasLogin && !usePortalLogin && !useVerifyOtp);
+                    if (canRefresh)
                     {
                         _ = await tokenService.GetTokenAsync(stoppingToken);
                     }

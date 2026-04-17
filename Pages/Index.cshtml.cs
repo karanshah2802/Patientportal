@@ -228,11 +228,32 @@ namespace Patientportal.Pages
 
             string apiUrl = $"{baseUrl}/api/Profile/getProfile?id={Id}";
             string apiUrl2 = $"{baseUrl}/api/Profile/getDetailsChangesbyId?id={Id}";
-             string apiUrl3 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
             string apiUrl4 = $"{baseUrl}/api/v1/Appointment/GetInvoiceAmount?id={Id}";
 
             // API Response Fetch karein
             var invoiceResponse = await _apiService.GetAsync<InvoiceResponse>(apiUrl4, token);
+            await LoadIndexDoctorBlocksAsync(baseUrl, token);
+
+            PatientData = await _apiService.GetAsync<ProfileListItem>(apiUrl, token) ?? new ProfileListItem();
+
+
+            if (PatientData != null)
+            {
+                ViewData["PatientName"] = PatientData.Name;
+            }
+            if (PatientData != null)
+            {
+                ViewData["Invoice"] = PatientData?.UnPaidValue;
+            }
+
+
+            ChangeRequests = await _apiService.GetAsync<List<string>>(apiUrl2, token) ?? new List<string>();
+            return Page();
+        }
+
+        private async Task LoadIndexDoctorBlocksAsync(string baseUrl, string token)
+        {
+            string apiUrl3 = $"{baseUrl}/api/v1/Appointment/GetAppointmentsByDoctor";
             Doctorblocktime = (await _apiService.GetAsync<List<AppointmentListItem>>(apiUrl3, token) ?? new List<AppointmentListItem>())
                 .Where(a => a.BlocksDoctorScheduleSlot())
                 .ToList();
@@ -251,22 +272,18 @@ namespace Patientportal.Pages
                     }
                 }
             }
+        }
 
-            PatientData = await _apiService.GetAsync<ProfileListItem>(apiUrl, token) ?? new ProfileListItem();
+        public async Task<IActionResult> OnGetSchedulerDataAsync()
+        {
+            BindPatientIdFromQuery();
+            if (!Id.HasValue || Id.Value <= 0)
+                return new JsonResult(new { error = "Invalid patient id." }) { StatusCode = 400 };
 
-
-            if (PatientData != null)
-            {
-                ViewData["PatientName"] = PatientData.Name;
-            }
-            if (PatientData != null)
-            {
-                ViewData["Invoice"] = PatientData?.UnPaidValue;
-            }
-
-
-            ChangeRequests = await _apiService.GetAsync<List<string>>(apiUrl2, token) ?? new List<string>();
-            return Page();
+            string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
+            string token = await _opsTokenService.GetTokenAsync();
+            await LoadIndexDoctorBlocksAsync(baseUrl, token);
+            return new JsonResult(new { doctorBlocks = Doctorblocktime });
         }
 
         public async Task<IActionResult> OnPostSavePatientAsync()

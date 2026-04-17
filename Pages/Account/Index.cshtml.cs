@@ -55,12 +55,12 @@ namespace Patientportal.Pages.Account
         }
 
         /// <summary>
-        /// New numbers: POST the same verify-otp style login API as <see cref="OpsTokenService"/> (ApiSettings:LoginPath).
-        /// Backend creates the user and returns an access token; use that token for profile + SendAuthToken if present.
+        /// New numbers: POST verify-otp on the API (path is <b>not</b> the service-account <c>LoginPath</c>;
+        /// use <c>ApiSettings:RegisterViaOtpLoginPath</c> so patient bootstrap stays on portalverify-otp while OPS token uses portal-login).
         /// </summary>
         private async Task<string?> TryRegisterViaLoginApiAsync(string mobile)
         {
-            var loginPath = _configuration["ApiSettings:LoginPath"] ?? "/api/v1/Account/portalverify-otp";
+            var loginPath = _configuration["ApiSettings:RegisterViaOtpLoginPath"] ?? "/api/v1/Account/portalverify-otp";
             if (loginPath.IndexOf("verify-otp", StringComparison.OrdinalIgnoreCase) < 0)
                 return null;
 
@@ -104,9 +104,23 @@ namespace Patientportal.Pages.Account
                 return new JsonResult(new { success = false, message = "Invalid phone number" });
             }
 
-            string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            var bearerToken = await _opsTokenService.GetTokenAsync();
-            string apiUrl2 = $"{baseUrl}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
+            string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
+            string bearerToken;
+            try
+            {
+                bearerToken = await _opsTokenService.GetTokenAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Service account token failed; patient Send OTP cannot call API");
+                return new JsonResult(new
+                {
+                    success = false,
+                    message = "Unable to reach sign-in services. Confirm the API is running and ServiceAccountEmail/ServiceAccountPassword (or user secrets) are set."
+                });
+            }
+
+            string apiUrl2 = $"{baseUrl.TrimEnd('/')}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
             var PatientDetails = await _apiService.GetPatientByMobilePreferIndependentAsync(apiUrl2, bearerToken);
             if (PatientDetails == null)
             {
@@ -122,7 +136,7 @@ namespace Patientportal.Pages.Account
                 return new JsonResult(new { success = false, message = "Maximum OTP attempts reached. Try again after 24 hours." });
             }
 
-            string apiUrl = $"{baseUrl}/api/v1/Account/PatientportalSendAuthToken/{request.Mobile}.json";
+            string apiUrl = $"{baseUrl.TrimEnd('/')}/api/v1/Account/PatientportalSendAuthToken/{request.Mobile}.json";
 
             try
             {
@@ -143,10 +157,19 @@ namespace Patientportal.Pages.Account
             {
                 return new JsonResult(new { success = false, message = "Invalid OTP number" });
             }
-            string baseUrl = _configuration["ApiSettings:BaseUrl"];
-            string token = await _opsTokenService.GetTokenAsync();
+            string baseUrl = _configuration["ApiSettings:BaseUrl"] ?? "";
+            string token;
+            try
+            {
+                token = await _opsTokenService.GetTokenAsync();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Service account token failed during OTP verify");
+                return new JsonResult(new { success = false, message = "Unable to reach sign-in services. Check API and service account configuration." });
+            }
 
-            string apiUrl = $"{baseUrl}/api/v1/Account/Patientportalverify-otp";
+            string apiUrl = $"{baseUrl.TrimEnd('/')}/api/v1/Account/Patientportalverify-otp";
 
             var response = await _apiService.PostAsync<InputModel, ApiResponse>(apiUrl, request, token);
 
@@ -154,7 +177,7 @@ namespace Patientportal.Pages.Account
             {
                 _otpService.ClearOTPAttempts(request.Mobile); // OTP attempts reset
 
-                string apiUrlProfile = $"{baseUrl}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
+                string apiUrlProfile = $"{baseUrl.TrimEnd('/')}/api/Profile/GetpatientByMobilenumber?Mobilenumber={request.Mobile}";
                 var patient = await _apiService.GetPatientByMobilePreferIndependentAsync(apiUrlProfile, token);
                 if (patient == null || patient.Id == 0)
                 {

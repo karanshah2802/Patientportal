@@ -937,3 +937,51 @@ body > .e-ddl.e-popup-open {
 #portal-dependents-container .portal-dep-mobile-empty {
     padding: 12px 4px;
 }
+
+/* Scheduler: overlay until fresh API data is applied (avoids visible date/grid flicker) */
+.portal-scheduler-loader-wrap {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.portal-scheduler-loader {
+    position: absolute;
+    inset: 0;
+    z-index: 25;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 0.75rem;
+    background: rgba(255, 255, 255, 0.93);
+    backdrop-filter: blur(3px);
+}
+
+.portal-scheduler-loader.is-active {
+    display: flex;
+}
+
+.portal-sched-spinner {
+    width: 2.75rem;
+    height: 2.75rem;
+    border: 3px solid #dee2e6;
+    border-top-color: var(--primary, #0061AB);
+    border-radius: 50%;
+    animation: portal-scheduler-spin 0.72s linear infinite;
+}
+
+@keyframes portal-scheduler-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.portal-scheduler-loader-text {
+    font-size: 0.9375rem;
+    color: #495057;
+    font-weight: 500;
+}

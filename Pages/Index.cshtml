@@ -270,7 +270,7 @@
                         </e-grid-columns>
                     </ejs-grid>
                     <script id="actionTemplate" type="text/x-template">
-                        ${if(statusName !== "Cancelled" && appoinmentType !== "Dr. Sejal Online Consultation" && appoinmentType !== "Appointment Request for Procedures")}
+                        ${if(statusName !== "Cancelled")}
                             <a href="#schedulerModal" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#schedulerModal">
                                 <img loading="lazy" src="@Url.Content("~/assets/calendar.svg")" width="18" height="20" alt="Calendar">
                             </a>
@@ -991,7 +991,11 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="control-section" >
+                    <div class="control-section portal-scheduler-loader-wrap" style="min-height: 50vh;">
+                        <div class="portal-scheduler-loader" id="schedulerModalScheduleLoader" role="status" aria-live="polite" aria-busy="false">
+                            <div class="portal-sched-spinner" aria-hidden="true"></div>
+                            <span class="portal-scheduler-loader-text">Loading schedule…</span>
+                        </div>
                         <div class="schedule-wrapper">
                             <ejs-schedule id="schedulerss" height="100%" width="100%"
                                           selectedDate="DateTime.Today"
@@ -1017,51 +1021,80 @@
     <script>
         document.addEventListener("DOMContentLoaded", function () {
             $('#schedulerModal').on('shown.bs.modal', function () {
-                loadSchedulerData(); // Modal open hone par function call hoga
+                loadSchedulerData();
+            });
+            $('#schedulerModal').on('hidden.bs.modal', function () {
+                var l = document.getElementById('schedulerModalScheduleLoader');
+                if (l) {
+                    l.classList.remove('is-active');
+                    l.setAttribute('aria-busy', 'false');
+                }
             });
         });
 
+        function portalIndexSchedulerDataUrl() {
+            var params = new URLSearchParams(window.location.search);
+            params.set('handler', 'SchedulerData');
+            return window.location.pathname + '?' + params.toString();
+        }
+
         function loadSchedulerData() {
-            var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
-
-            if (!doctorBlockTimes || doctorBlockTimes.length === 0) {
-                console.log("No blocked appointments found.");
-                return;
-            } else {
-                console.log("Blocked Appointments:", doctorBlockTimes);
+            var loader = document.getElementById('schedulerModalScheduleLoader');
+            function showL() {
+                if (loader) {
+                    loader.classList.add('is-active');
+                    loader.setAttribute('aria-busy', 'true');
+                }
             }
-
+            function hideL() {
+                if (loader) {
+                    loader.classList.remove('is-active');
+                    loader.setAttribute('aria-busy', 'false');
+                }
+            }
+            showL();
             setTimeout(function () {
                 var scheduleObj = document.getElementById('schedulerss')?.ej2_instances?.[0];
-
                 if (!scheduleObj) {
                     console.error("Scheduler instance not found.");
+                    hideL();
                     return;
                 }
 
-                // Convert data to Scheduler format
-                var blockAppointments = doctorBlockTimes.map(function (item) {
-                    return {
-                        Id: item.id,
-                        Subject: 'Not available',
-                        StartTime: new Date(item.ProcedureScheduleDateTime),
-                        EndTime: new Date(item.ProcedureScheduleEndDateTime),
-                        IsReadonly: true,
-                        ClassName: "blocked-slot" // Apply CSS for styling
-                    };
-                });
-
-                console.log("Final Event Data for Scheduler:", blockAppointments);
-
-                // Reset scheduler and load new data
-                scheduleObj.eventSettings.dataSource = [];
-                scheduleObj.refresh(); // First refresh to clear old data
-
-                setTimeout(() => {
-                    scheduleObj.eventSettings.dataSource = blockAppointments;
-                    scheduleObj.refresh(); // Second refresh to load new data
-                }, 300); // Small delay to prevent UI issues
-
+                fetch(portalIndexSchedulerDataUrl(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+                    .then(function (data) {
+                        var doctorBlockTimes = data.doctorBlocks || [];
+                        if (!doctorBlockTimes.length) {
+                            scheduleObj.eventSettings.dataSource = [];
+                            scheduleObj.refresh();
+                            setTimeout(hideL, 80);
+                            return;
+                        }
+                        var blockAppointments = doctorBlockTimes.map(function (item) {
+                            var s = item.procedureScheduleDateTime || item.ProcedureScheduleDateTime;
+                            var e = item.procedureScheduleEndDateTime || item.ProcedureScheduleEndDateTime;
+                            return {
+                                Id: item.id,
+                                Subject: 'Not available',
+                                StartTime: new Date(s),
+                                EndTime: new Date(e),
+                                IsReadonly: true,
+                                ClassName: "blocked-slot"
+                            };
+                        });
+                        scheduleObj.eventSettings.dataSource = [];
+                        scheduleObj.refresh();
+                        setTimeout(function () {
+                            scheduleObj.eventSettings.dataSource = blockAppointments;
+                            scheduleObj.refresh();
+                            setTimeout(hideL, 80);
+                        }, 300);
+                    })
+                    .catch(function () {
+                        console.error("Failed to refresh scheduler data.");
+                        hideL();
+                    });
             }, 500);
         }
 
@@ -1200,7 +1233,11 @@
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="control-section">
+                    <div class="control-section portal-scheduler-loader-wrap" style="min-height: 50vh;">
+                        <div class="portal-scheduler-loader" id="schedulerModal2ScheduleLoader" role="status" aria-live="polite" aria-busy="false">
+                            <div class="portal-sched-spinner" aria-hidden="true"></div>
+                            <span class="portal-scheduler-loader-text">Loading schedule…</span>
+                        </div>
                         <div class="schedule-wrapper">
                             <ejs-schedule id="schedulerss2" height="100%" width="100%"
                                           selectedDate="DateTime.Today"
@@ -1225,55 +1262,70 @@
 
     <!-- JavaScript to Handle Both Modals -->
     <script>
-        document.addEventListener("DOMContentLoaded", function () {
-
-            $('#schedulerModal2').on('shown.bs.modal', function () {
-                loadSchedulerData2('schedulerss2'); // Load data for second modal
-            });
-        });
-
         function loadSchedulerData2(schedulerId) {
-            debugger;
-            var doctorBlockTimes = @Html.Raw(Json.Serialize(Model.Doctorblocktime));
-
-            if (!doctorBlockTimes || doctorBlockTimes.length === 0) {
-                console.log("No blocked appointments found.");
-                return;
-            } else {
-                console.log("Blocked Appointments:", doctorBlockTimes);
+            var loader = document.getElementById('schedulerModal2ScheduleLoader');
+            function showL() {
+                if (loader) {
+                    loader.classList.add('is-active');
+                    loader.setAttribute('aria-busy', 'true');
+                }
             }
-
+            function hideL() {
+                if (loader) {
+                    loader.classList.remove('is-active');
+                    loader.setAttribute('aria-busy', 'false');
+                }
+            }
+            showL();
             setTimeout(function () {
                 var scheduleObj = document.getElementById(schedulerId)?.ej2_instances?.[0];
-
                 if (!scheduleObj) {
                     console.error("Scheduler instance not found.");
+                    hideL();
                     return;
                 }
 
-                // Convert data to Scheduler format
-                var blockAppointments = doctorBlockTimes.map(function (item) {
-                    return {
-                        Id: item.doctorId,
-                        Subject: 'Not available',
-                        StartTime: new Date(item.procedureScheduleDateTime),
-                        EndTime: new Date(item.procedureScheduleEndDateTime),
-                        IsReadonly: true,
-                        ClassName: "blocked-slot"
-                    };
-                });
-
-                console.log("Final Event Data for Scheduler:", blockAppointments);
-
-                // Reset scheduler and load new data
-                scheduleObj.eventSettings.dataSource = [];
-                scheduleObj.refresh();
-
-                setTimeout(() => {
-                    scheduleObj.eventSettings.dataSource = blockAppointments;
-                    scheduleObj.refresh();
-                }, 300);
-
+                fetch(portalIndexSchedulerDataUrl(), { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+                    .then(function (r) { return r.ok ? r.json() : Promise.reject(); })
+                    .then(function (data) {
+                        var doctorBlockTimes = data.doctorBlocks || [];
+                        if (!doctorBlockTimes.length) {
+                            scheduleObj.eventSettings.dataSource = [];
+                            scheduleObj.refresh();
+                            setTimeout(hideL, 80);
+                            return;
+                        }
+                        var blockAppointments = doctorBlockTimes.map(function (item) {
+                            var s = item.procedureScheduleDateTime || item.ProcedureScheduleDateTime;
+                            var e = item.procedureScheduleEndDateTime || item.ProcedureScheduleEndDateTime;
+                            return {
+                                Id: item.doctorId != null ? item.doctorId : item.id,
+                                Subject: 'Not available',
+                                StartTime: new Date(s),
+                                EndTime: new Date(e),
+                                IsReadonly: true,
+                                ClassName: "blocked-slot"
+                            };
+                        });
+                        scheduleObj.eventSettings.dataSource = [];
+                        scheduleObj.refresh();
+                        setTimeout(function () {
+                            scheduleObj.eventSettings.dataSource = blockAppointments;
+                            scheduleObj.refresh();
+                            if (window.innerWidth <= 768) {
+                                scheduleObj.timeScale = { enable: true, interval: 15, slotCount: 1 };
+                                scheduleObj.currentView = 'Day';
+                                if (typeof scheduleObj.refreshLayout === 'function') {
+                                    scheduleObj.refreshLayout();
+                                }
+                            }
+                            setTimeout(hideL, 80);
+                        }, 300);
+                    })
+                    .catch(function () {
+                        console.error("Failed to refresh scheduler data.");
+                        hideL();
+                    });
             }, 500);
         }
 
@@ -1353,23 +1405,14 @@
     <script>
         $('#schedulerModal2').on('shown.bs.modal', function () {
             loadSchedulerData2('schedulerss2');
-            setTimeout(() => {
-                var scheduleObj = document.getElementById('schedulerss2').ej2_instances[0];
-                if (scheduleObj) {
-                    if (window.innerWidth <= 768) { // Mobile View Condition
-                        scheduleObj.timeScale = {
-                            enable: true,
-                            interval: 15,
-                            slotCount: 1
-                        };
-
-                        scheduleObj.currentView = 'Day'; // Force Day View
-                        scheduleObj.refreshLayout(); // Adaptive layout refresh
-                    }
-                }
-            }, 500); // Thoda delay dena important hai modal ke liye
         });
-
+        $('#schedulerModal2').on('hidden.bs.modal', function () {
+            var l = document.getElementById('schedulerModal2ScheduleLoader');
+            if (l) {
+                l.classList.remove('is-active');
+                l.setAttribute('aria-busy', 'false');
+            }
+        });
     </script>
     <!-- Blocked Slot Template -->
     <script id="blockTemplate2" type="text/x-template">
@@ -1941,7 +1984,7 @@
                                     </div>
 
                                     <div class="ius-ctrls">
-                                         ${appointment.statusName !== "Cancelled" && appointment.appoinmentType !== "Dr. Sejal Online Consultation" && appointment.appoinmentType !== "Appointment Request for Procedures" ? `
+                                         ${appointment.statusName !== "Cancelled" ? `
                                             <a href="#schedulerModal" class="app-resched" title="Reschedule" data-bs-toggle="modal" data-bs-target="#schedulerModal">
                                                      <img loading="lazy" src="@Url.Content("~/assets/calendar.svg")" width="18" height="20" alt="Calendar">
 
